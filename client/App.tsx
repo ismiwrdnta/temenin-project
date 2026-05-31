@@ -12,6 +12,7 @@ import OtpVerifikasi from "./pages/OtpVerifikasi";
 import Masuk from "./pages/Masuk";
 import DaftarProvider from "./pages/DaftarProvider";
 import DashboardPengguna from "./pages/DashboardPengguna";
+import Pencarian from "./pages/Pencarian";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -29,6 +30,7 @@ const App = () => (
           <Route path="/masuk" element={<Masuk />} />
           <Route path="/daftar-provider" element={<DaftarProvider />} />
           <Route path="/dashboard" element={<DashboardPengguna />} />
+          <Route path="/pencarian" element={<Pencarian />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
