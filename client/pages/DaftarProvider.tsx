@@ -1,7 +1,9 @@
 import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "@/context/AuthContext";
 
 export default function DaftarProvider() {
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
 
   return (
     <div className="min-h-screen bg-[#FFFCF9] font-['Poppins',sans-serif] relative overflow-hidden flex flex-col items-center px-4 py-10">
@@ -137,7 +139,13 @@ export default function DaftarProvider() {
             Kembali
           </button>
           <button
-            onClick={() => navigate("/otp")}
+            onClick={() => {
+              if (!isAuthenticated) {
+                navigate("/daftar");
+                return;
+              }
+              navigate("/dashboard-penyedia");
+            }}
             className="py-4 rounded-xl text-white font-semibold text-base md:text-lg hover:opacity-90 transition-opacity"
             style={{ background: 'linear-gradient(90deg, #E91E8C 0%, #A131CC 100%)' }}
           >
