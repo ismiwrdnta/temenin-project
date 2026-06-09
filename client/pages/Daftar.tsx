@@ -3,6 +3,9 @@ import { Link, useNavigate } from "react-router-dom";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useAuth } from "@/context/AuthContext";
+import { registerUser } from "@/lib/authApi";
+import { GoogleAuthButton } from "@/components/GoogleAuthButton";
 import {
   Form,
   FormControl,
@@ -29,7 +32,10 @@ type RegisterFormValues = z.infer<typeof registerSchema>;
 
 export default function Daftar() {
   const [role, setRole] = useState<Role>("pengguna");
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
+  const { setSession } = useAuth();
 
   const form = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
@@ -41,10 +47,30 @@ export default function Daftar() {
     },
   });
 
-  function onSubmit(data: RegisterFormValues) {
-    console.log("Data Pendaftaran:", { ...data, role });
-    // Di sini nantinya Anda bisa menambahkan logika API untuk register
-    navigate(role === "penyedia" ? "/daftar-provider" : "/otp");
+  async function onSubmit(data: RegisterFormValues) {
+    setSubmitError(null);
+    setIsSubmitting(true);
+    try {
+      const session = await registerUser({
+        name: data.name,
+        email: data.email,
+        phone: data.phone,
+        password: data.password,
+        role,
+      });
+      setSession(session.token, session.user);
+      if (role === "penyedia") {
+        navigate("/daftar-provider");
+      } else {
+        navigate("/otp", { state: { email: session.user.email } });
+      }
+    } catch (err) {
+      setSubmitError(
+        err instanceof Error ? err.message : "Gagal mendaftar. Coba lagi.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -200,12 +226,19 @@ export default function Daftar() {
             />
 
             {/* Masuk Sekarang Button */}
+            {submitError && (
+              <p className="text-red-500 text-sm text-center mt-2" role="alert">
+                {submitError}
+              </p>
+            )}
+
             <button
               type="submit"
-              className="w-full py-4 rounded-xl text-white font-semibold text-lg mt-4 mb-5 hover:opacity-90 transition-opacity"
+              disabled={isSubmitting}
+              className="w-full py-4 rounded-xl text-white font-semibold text-lg mt-4 mb-5 hover:opacity-90 transition-opacity disabled:opacity-60"
               style={{ background: 'linear-gradient(90deg, #E91E8C 0%, #A131CC 100%)' }}
             >
-              Daftar Sekarang
+              {isSubmitting ? "Memproses..." : "Daftar Sekarang"}
             </button>
           </form>
         </Form>
@@ -225,16 +258,12 @@ export default function Daftar() {
           <hr className="flex-1 border-[#E5D5C5]" />
         </div>
 
-        {/* Google Button */}
-        <button type="button" className="w-full py-4 rounded-xl border border-[#E91E8C] bg-[#F5EBE0] flex items-center justify-center gap-3 font-semibold text-[#E91E8C] text-base md:text-lg hover:bg-[#fce7f3] transition-colors">
-          <svg width="26" height="26" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M21.6 11.23c0-.77-.07-1.5-.19-2.21H11v4.18h5.96a5.09 5.09 0 01-2.21 3.34v2.78h3.58C20.33 17.5 21.6 14.6 21.6 11.23z" fill="#4285F4"/>
-            <path d="M11 22c2.97 0 5.46-.98 7.28-2.67l-3.57-2.77c-.99.66-2.26 1.06-3.71 1.06-2.86 0-5.28-1.93-6.14-4.52H1.17v2.86A11 11 0 0011 22z" fill="#34A853"/>
-            <path d="M4.86 13.1A6.6 6.6 0 014.52 11c0-.73.13-1.44.34-2.1V6.04H1.17A11 11 0 000 11c0 1.77.43 3.45 1.17 4.96l3.69-2.86z" fill="#FBBC05"/>
-            <path d="M11 4.38c1.62 0 3.06.56 4.2 1.65l3.16-3.16A10.98 10.98 0 0011 0 11 11 0 001.17 6.04l3.69 2.86C5.72 6.31 8.14 4.38 11 4.38z" fill="#EA4335"/>
-          </svg>
-          Lanjut dengan Google
-        </button>
+        <GoogleAuthButton
+          label="Lanjut dengan Google"
+          role={role}
+          iconSize={26}
+          className="font-semibold text-base md:text-lg"
+        />
       </div>
     </div>
   );

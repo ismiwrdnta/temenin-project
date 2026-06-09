@@ -1,5 +1,7 @@
 import { useRef, useState, useEffect, KeyboardEvent, ChangeEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "@/context/AuthContext";
+import { maskEmail } from "@/lib/authApi";
 
 const OTP_LENGTH = 6;
 const RESEND_SECONDS = 165; // 2:45
@@ -9,6 +11,12 @@ export default function OtpVerifikasi() {
   const [countdown, setCountdown] = useState(RESEND_SECONDS);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const navigate = useNavigate();
+  const location = useLocation();
+  const { user, isAuthenticated } = useAuth();
+
+  const email =
+    (location.state as { email?: string } | null)?.email ?? user?.email;
+  const maskedEmail = email ? maskEmail(email) : "email kamu";
 
   useEffect(() => {
     inputRefs.current[0]?.focus();
@@ -86,7 +94,7 @@ export default function OtpVerifikasi() {
 
         {/* Subtitle */}
         <p className="text-[#94A3B8] text-base mb-1">Kode OTP 6 digit telah dikirim ke</p>
-        <p className="text-[#2C1810] font-bold text-base mb-1">d***@example.com</p>
+        <p className="text-[#2C1810] font-bold text-base mb-1">{maskedEmail}</p>
         <p className="text-[#94A3B8] text-base mb-10">
           Berlaku selama <span className="text-[#4C1D95] font-bold">10 menit</span>
         </p>
@@ -115,7 +123,13 @@ export default function OtpVerifikasi() {
         <button
           className="w-full max-w-[600px] py-4 rounded-xl text-white font-semibold text-lg mb-5 transition-opacity"
           style={{ background: 'linear-gradient(90deg, #E91E8C 0%, #A131CC 100%)' }}
-          onClick={() => navigate("/dashboard")}
+          onClick={() => {
+            if (!isAuthenticated) {
+              navigate("/masuk", { replace: true });
+              return;
+            }
+            navigate("/dashboard");
+          }}
         >
           Verifikasi OTP
         </button>

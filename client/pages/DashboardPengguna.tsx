@@ -1,11 +1,10 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import AppNavbar from "@/components/AppNavbar";
+import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
 
-const MOCK_USER_DATA = {
-  name: "Diah Ayu Lestari",
-  initials: "DA",
+const EMPTY_STATS = {
   balance: 0,
   stats: {
     active: 0,
@@ -127,9 +126,31 @@ function StatCard({
 }
 
 export default function DashboardPengguna() {
-  const [userData] = useState(MOCK_USER_DATA);
+  const { user, isAuthenticated, isLoading } = useAuth();
   const [activeOrders] = useState(MOCK_ACTIVE_ORDERS);
   const [nearbyUsers] = useState(MOCK_NEARBY_USERS);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#F8F9FA] text-[#94A3B8]">
+        Memuat...
+      </div>
+    );
+  }
+
+  if (!isAuthenticated || !user) {
+    return <Navigate to="/masuk" replace />;
+  }
+
+  if (user.role === "penyedia") {
+    return <Navigate to="/dashboard-penyedia" replace />;
+  }
+
+  const userData = {
+    name: user.name,
+    initials: user.initials,
+    ...EMPTY_STATS,
+  };
 
   const hasBalance = userData.balance > 0;
 
