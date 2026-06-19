@@ -2,18 +2,17 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
   useState,
   type ReactNode,
 } from "react";
-import type { PublicUser, UserRole } from "@shared/api";
+import type { UserRole } from "@shared/api";
 import {
-  clearStoredToken,
-  fetchCurrentUser,
-  getStoredToken,
-  setStoredToken,
-} from "@/lib/authApi";
+  getAccountByEmail,
+  saveAccount,
+  type StoredAccount,
+} from "@/lib/local-accounts";
+import { resolveCompanionId } from "@/lib/provider-link";
 
 export type { UserRole };
 
@@ -25,15 +24,26 @@ export type AuthUser = {
   email: string;
   phone?: string;
   picture?: string;
+  companionId?: number;
+};
+
+type LoginLocalInput = {
+  name: string;
+  email: string;
+  role: UserRole;
+  phone?: string;
+  picture?: string;
+  companionId?: number;
+  rememberAccount?: boolean;
 };
 
 type AuthContextValue = {
   user: AuthUser | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  setSession: (token: string, user: PublicUser) => void;
+  loginLocal: (profile: LoginLocalInput) => void;
+  loginFromStoredAccount: (account: StoredAccount) => void;
   logout: () => void;
-  refreshUser: () => Promise<void>;
 };
 
 const SESSION_KEY = "temenin_auth";
@@ -50,15 +60,22 @@ function getInitials(name: string) {
     .toUpperCase();
 }
 
-function toAuthUser(user: PublicUser): AuthUser {
+function buildAuthUser(profile: LoginLocalInput): AuthUser {
+  const companionId =
+    profile.companionId ??
+    (profile.role === "penyedia"
+      ? resolveCompanionId(profile.name)
+      : undefined);
+
   return {
-    id: user.id,
-    name: user.name,
-    initials: getInitials(user.name),
-    role: user.role,
-    email: user.email,
-    phone: user.phone,
-    picture: user.picture,
+    id: `local-${profile.email.toLowerCase()}`,
+    name: profile.name.trim(),
+    initials: getInitials(profile.name),
+    role: profile.role,
+    email: profile.email.trim().toLowerCase(),
+    phone: profile.phone,
+    picture: profile.picture,
+    companionId,
   };
 }
 
@@ -66,7 +83,11 @@ function loadCachedUser(): AuthUser | null {
   try {
     const raw = sessionStorage.getItem(SESSION_KEY);
     if (!raw) return null;
-    return JSON.parse(raw) as AuthUser;
+    const user = JSON.parse(raw) as AuthUser;
+    if (user.role === "penyedia" && !user.companionId) {
+      user.companionId = resolveCompanionId(user.name);
+    }
+    return user;
   } catch {
     return null;
   }
@@ -74,17 +95,41 @@ function loadCachedUser(): AuthUser | null {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(loadCachedUser);
-  const [isLoading, setIsLoading] = useState(() => Boolean(getStoredToken()));
 
   const persistUser = useCallback((authUser: AuthUser) => {
     setUser(authUser);
     sessionStorage.setItem(SESSION_KEY, JSON.stringify(authUser));
+    sessionStorage.removeItem("temenin_token");
   }, []);
 
-  const setSession = useCallback(
-    (token: string, publicUser: PublicUser) => {
-      setStoredToken(token);
-      persistUser(toAuthUser(publicUser));
+  const loginFromStoredAccount = useCallback(
+    (account: StoredAccount) => {
+      persistUser(
+        buildAuthUser({
+          email: account.email,
+          name: account.name,
+          role: account.role,
+          phone: account.phone,
+          companionId: account.companionId,
+        }),
+      );
+    },
+    [persistUser],
+  );
+
+  const loginLocal = useCallback(
+    (profile: LoginLocalInput) => {
+      const authUser = buildAuthUser(profile);
+      persistUser(authUser);
+
+      if (profile.rememberAccount !== false) {
+        saveAccount({
+          email: authUser.email,
+          name: authUser.name,
+          role: authUser.role,
+          phone: authUser.phone,
+        });
+      }
     },
     [persistUser],
   );
@@ -92,42 +137,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => {
     setUser(null);
     sessionStorage.removeItem(SESSION_KEY);
-    clearStoredToken();
+    sessionStorage.removeItem("temenin_token");
   }, []);
-
-  const refreshUser = useCallback(async () => {
-    const token = getStoredToken();
-    if (!token) {
-      logout();
-      return;
-    }
-    const publicUser = await fetchCurrentUser(token);
-    persistUser(toAuthUser(publicUser));
-  }, [logout, persistUser]);
-
-  useEffect(() => {
-    const token = getStoredToken();
-    if (!token) {
-      setIsLoading(false);
-      return;
-    }
-
-    fetchCurrentUser(token)
-      .then((publicUser) => persistUser(toAuthUser(publicUser)))
-      .catch(() => logout())
-      .finally(() => setIsLoading(false));
-  }, [logout, persistUser]);
 
   const value = useMemo(
     () => ({
       user,
       isAuthenticated: user !== null,
-      isLoading,
-      setSession,
+      isLoading: false,
+      loginLocal,
+      loginFromStoredAccount,
       logout,
-      refreshUser,
     }),
-    [user, isLoading, setSession, logout, refreshUser],
+    [user, loginLocal, loginFromStoredAccount, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -140,3 +162,5 @@ export function useAuth() {
   }
   return context;
 }
+
+export { getAccountByEmail };

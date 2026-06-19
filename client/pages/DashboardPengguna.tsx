@@ -1,7 +1,10 @@
-import { useState } from "react";
-import { Link, Navigate } from "react-router-dom";
+import { useMemo } from "react";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import AppNavbar from "@/components/AppNavbar";
+import ProviderListCard from "@/components/ProviderListCard";
 import { useAuth } from "@/context/AuthContext";
+import { useOrders } from "@/context/OrderContext";
+import { getNearestProviders } from "@/data/providers";
 import { cn } from "@/lib/utils";
 
 const EMPTY_STATS = {
@@ -12,30 +15,6 @@ const EMPTY_STATS = {
     rating: 0,
     curhat: 0,
   },
-};
-
-const MOCK_ACTIVE_ORDERS: ActiveOrder[] = [];
-const MOCK_NEARBY_USERS: NearbyUser[] = [];
-
-type ActiveOrder = {
-  id: number;
-  name: string;
-  initials: string;
-  service: string;
-  duration: string;
-  time: string;
-  isNew?: boolean;
-};
-
-type NearbyUser = {
-  id: number;
-  name: string;
-  initials: string;
-  tags: string[];
-  rating: number;
-  reviews: number;
-  price: string;
-  distance: string;
 };
 
 function EmptyStateCard({
@@ -126,9 +105,23 @@ function StatCard({
 }
 
 export default function DashboardPengguna() {
+  const navigate = useNavigate();
   const { user, isAuthenticated, isLoading } = useAuth();
-  const [activeOrders] = useState(MOCK_ACTIVE_ORDERS);
-  const [nearbyUsers] = useState(MOCK_NEARBY_USERS);
+  const { orders } = useOrders();
+  const nearbyProviders = useMemo(() => getNearestProviders(3), []);
+
+  const activeOrders = useMemo(
+    () =>
+      orders.filter(
+        (o) => o.status === "berlangsung" || o.status === "pending",
+      ),
+    [orders],
+  );
+
+  const completedCount = useMemo(
+    () => orders.filter((o) => o.status === "selesai").length,
+    [orders],
+  );
 
   if (isLoading) {
     return (
@@ -149,7 +142,13 @@ export default function DashboardPengguna() {
   const userData = {
     name: user.name,
     initials: user.initials,
-    ...EMPTY_STATS,
+    balance: EMPTY_STATS.balance,
+    stats: {
+      active: activeOrders.length,
+      completed: completedCount,
+      rating: EMPTY_STATS.stats.rating,
+      curhat: EMPTY_STATS.stats.curhat,
+    },
   };
 
   const hasBalance = userData.balance > 0;
@@ -189,7 +188,7 @@ export default function DashboardPengguna() {
             </p>
             <div className="flex flex-wrap gap-3">
               <Link
-                to="/pencarian"
+                to="/jasa-temenin"
                 className="bg-[#E91E8C] hover:bg-[#D81B60] text-white px-6 py-2.5 rounded-xl font-medium text-sm transition-colors shadow-sm inline-block"
               >
                 Cari Temanian
@@ -289,14 +288,14 @@ export default function DashboardPengguna() {
                         </div>
                         <div>
                           <h4 className="text-[#4C1D95] font-bold text-base">
-                            {order.name}
+                            {order.providerName}
                           </h4>
                           <p className="text-[#94A3B8] text-xs mt-0.5">
                             {order.service} • {order.duration}
                           </p>
                           <div className="flex items-center gap-1 mt-1">
                             <p className="text-[#F59E0B] text-xs font-medium">
-                              {order.time}
+                              {order.datetime}
                             </p>
                             <svg
                               width="12"
@@ -311,7 +310,11 @@ export default function DashboardPengguna() {
                         </div>
                       </div>
 
-                      <button className="bg-[#E91E8C] hover:bg-[#D81B60] text-white px-5 py-2 rounded-xl font-medium text-xs transition-colors sm:ml-auto w-full sm:w-auto">
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/pesanan/${order.id}`)}
+                        className="bg-[#E91E8C] hover:bg-[#D81B60] text-white px-5 py-2 rounded-xl font-medium text-xs transition-colors sm:ml-auto w-full sm:w-auto"
+                      >
                         Lihat Detail
                       </button>
                     </div>
@@ -321,7 +324,10 @@ export default function DashboardPengguna() {
                 <EmptyStateCard
                   message="Belum ada pesanan aktif"
                   hint="Pesan jasa Temenin untuk melihat pesanan yang sedang berjalan di sini."
-                  action={{ label: "Cari Temanian" }}
+                  action={{
+                    label: "Cari Temanian",
+                    onClick: () => navigate("/jasa-temenin"),
+                  }}
                 />
               )}
             </div>
@@ -331,82 +337,23 @@ export default function DashboardPengguna() {
                 <h3 className="text-[#2C1810] font-bold text-base lg:text-lg">
                   Temanian Terdekat
                 </h3>
-                {nearbyUsers.length > 0 && (
-                  <Link
-                    to="#"
-                    className="text-[#E91E8C] text-sm font-medium hover:underline"
-                  >
-                    Lihat Semua
-                  </Link>
-                )}
+                <Link
+                  to="/pencarian"
+                  className="text-[#E91E8C] text-sm font-medium hover:underline"
+                >
+                  Lihat Semua
+                </Link>
               </div>
 
-              {nearbyUsers.length > 0 ? (
-                <div className="flex flex-col gap-4">
-                  {nearbyUsers.map((user) => (
-                    <div
-                      key={user.id}
-                      className="bg-white rounded-2xl p-4 lg:p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 shadow-sm border border-gray-100"
-                    >
-                      <div className="flex items-center gap-4 min-w-0">
-                        <div className="w-12 h-12 rounded-full bg-[#FBCFE8] flex items-center justify-center text-[#E91E8C] font-bold text-sm flex-shrink-0">
-                          {user.initials}
-                        </div>
-                        <div className="min-w-0">
-                          <h4 className="text-[#4C1D95] font-bold text-base">
-                            {user.name}
-                          </h4>
-
-                          <div className="flex flex-wrap gap-2 mt-1.5 mb-1.5">
-                            {user.tags.map((tag, index) => (
-                              <span
-                                key={index}
-                                className="bg-[#FDF4FF] text-[#E91E8C] text-[10px] font-medium px-2.5 py-0.5 rounded-full border border-[#FBCFE8]"
-                              >
-                                {tag}
-                              </span>
-                            ))}
-                          </div>
-
-                          <div className="flex items-center gap-2 text-xs flex-wrap">
-                            <div className="flex items-center gap-1">
-                              <svg
-                                width="12"
-                                height="12"
-                                viewBox="0 0 24 24"
-                                fill="#2C1810"
-                                xmlns="http://www.w3.org/2000/svg"
-                              >
-                                <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" />
-                              </svg>
-                              <span className="font-bold text-[#2C1810]">
-                                {user.rating}
-                              </span>
-                              <span className="text-[#94A3B8]">
-                                ({user.reviews})
-                              </span>
-                            </div>
-                            <span className="text-[#94A3B8]">-</span>
-                            <span className="font-bold text-[#4C1D95]">
-                              {user.price}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="text-[#94A3B8] text-xs font-medium sm:text-right flex-shrink-0">
-                        {user.distance}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <EmptyStateCard
-                  message="Belum ada Temanian terdekat"
-                  hint="Aktifkan lokasi atau cari Temanian untuk melihat rekomendasi di sekitarmu."
-                  action={{ label: "Cari Temanian" }}
-                />
-              )}
+              <div className="flex flex-col gap-4">
+                {nearbyProviders.map((provider) => (
+                  <ProviderListCard
+                    key={provider.id}
+                    provider={provider}
+                    linkTo="/pencarian"
+                  />
+                ))}
+              </div>
             </div>
           </section>
         </div>

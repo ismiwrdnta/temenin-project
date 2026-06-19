@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useGoogleLogin } from "@react-oauth/google";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
-import { authenticateWithGoogle } from "@/lib/googleAuth";
 import type { UserRole } from "@shared/api";
 import { cn } from "@/lib/utils";
 
@@ -83,7 +82,7 @@ function GoogleAuthButtonActive({
   iconSize = 22,
 }: GoogleAuthButtonProps) {
   const navigate = useNavigate();
-  const { setSession } = useAuth();
+  const { loginLocal } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -95,12 +94,33 @@ function GoogleAuthButtonActive({
       setLoading(true);
       setError(null);
       try {
-        const session = await authenticateWithGoogle(
-          tokenResponse.access_token,
-          role,
+        const profileRes = await fetch(
+          "https://www.googleapis.com/oauth2/v3/userinfo",
+          {
+            headers: {
+              Authorization: `Bearer ${tokenResponse.access_token}`,
+            },
+          },
         );
-        setSession(session.token, session.user);
-        navigate(getRedirectPath(session.user.role, isRegister));
+        if (!profileRes.ok) {
+          throw new Error("Gagal mengambil profil Google.");
+        }
+        const profile = (await profileRes.json()) as {
+          email?: string;
+          name?: string;
+          picture?: string;
+        };
+        if (!profile.email) {
+          throw new Error("Email Google tidak tersedia.");
+        }
+        loginLocal({
+          name: profile.name ?? profile.email.split("@")[0],
+          email: profile.email,
+          picture: profile.picture,
+          role,
+          rememberAccount: true,
+        });
+        navigate(getRedirectPath(role, isRegister));
       } catch (err) {
         setError(
           err instanceof Error ? err.message : "Gagal masuk dengan Google.",
