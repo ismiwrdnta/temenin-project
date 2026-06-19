@@ -1,10 +1,8 @@
-import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useAuth } from "@/context/AuthContext";
-import { loginUser } from "@/lib/authApi";
+import { getAccountByEmail, useAuth } from "@/context/AuthContext";
 import { GoogleAuthButton } from "@/components/GoogleAuthButton";
 import {
   Form,
@@ -25,9 +23,7 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function Masuk() {
   const navigate = useNavigate();
-  const { setSession } = useAuth();
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { loginLocal, loginFromStoredAccount } = useAuth();
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -37,27 +33,23 @@ export default function Masuk() {
     },
   });
 
-  async function onSubmit(data: LoginFormValues) {
-    setSubmitError(null);
-    setIsSubmitting(true);
-    try {
-      const session = await loginUser({
-        email: data.email,
-        password: data.password,
-      });
-      setSession(session.token, session.user);
-      const path =
-        session.user.role === "penyedia"
-          ? "/dashboard-penyedia"
-          : "/dashboard";
-      navigate(path);
-    } catch (err) {
-      setSubmitError(
-        err instanceof Error ? err.message : "Gagal masuk. Coba lagi.",
+  function onSubmit(data: LoginFormValues) {
+    const existing = getAccountByEmail(data.email);
+
+    if (existing) {
+      loginFromStoredAccount(existing);
+      navigate(
+        existing.role === "penyedia" ? "/dashboard-penyedia" : "/dashboard",
       );
-    } finally {
-      setIsSubmitting(false);
+      return;
     }
+
+    loginLocal({
+      name: data.email.split("@")[0],
+      email: data.email,
+      role: "pengguna",
+    });
+    navigate("/dashboard");
   }
 
   return (
@@ -130,20 +122,13 @@ export default function Masuk() {
               </span>
             </div>
 
-            {submitError && (
-              <p className="text-red-500 text-sm text-center" role="alert">
-                {submitError}
-              </p>
-            )}
-
             {/* Masuk Sekarang Button */}
             <button
               type="submit"
-              disabled={isSubmitting}
-              className="w-full py-4 rounded-xl text-white font-semibold text-lg mb-5 transition-opacity hover:opacity-90 disabled:opacity-60"
+              className="w-full py-4 rounded-xl text-white font-semibold text-lg mb-5 transition-opacity hover:opacity-90"
               style={{ background: 'linear-gradient(90deg, #E91E8C 0%, #A131CC 100%)' }}
             >
-              {isSubmitting ? "Memproses..." : "Masuk Sekarang"}
+              Masuk Sekarang
             </button>
           </form>
         </Form>

@@ -34,6 +34,18 @@ function OrderActions({
     navigate(`/pesanan/${order.id}/ulasan`);
   };
 
+  if (order.status === "pending") {
+    return (
+      <Link
+        to={`/pesanan/${order.id}`}
+        onClick={(e) => e.stopPropagation()}
+        className="mt-4 w-full bg-white border border-[#FACC15] text-[#CA8A04] hover:bg-[#FEFCE8] py-2.5 rounded-xl font-medium text-sm transition-colors flex items-center justify-center gap-2"
+      >
+        Lihat Status Pesanan
+      </Link>
+    );
+  }
+
   if (order.status === "berlangsung") {
     return (
       <div className="flex flex-col sm:flex-row gap-3 mt-4">
@@ -185,7 +197,7 @@ function EmptyState({
             untuk melihat riwayat pesanan di sini.
           </p>
           <Link
-            to="/pencarian"
+            to="/jasa-temenin"
             className="mt-5 bg-[#E91E8C] hover:bg-[#D81B60] text-white px-6 py-2.5 rounded-xl font-medium text-sm transition-colors shadow-sm"
           >
             Cari Temanian
@@ -219,7 +231,9 @@ export default function Pesanan() {
   const filteredOrders = useMemo(() => {
     if (activeFilter === "semua") return orders;
     if (activeFilter === "aktif") {
-      return orders.filter((o) => o.status === "berlangsung");
+      return orders.filter(
+        (o) => o.status === "berlangsung" || o.status === "pending",
+      );
     }
     if (activeFilter === "selesai") {
       return orders.filter((o) => o.status === "selesai");

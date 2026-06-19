@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 const NAV_ITEMS = [
   { label: "Beranda", path: "/dashboard", key: "beranda" },
   { label: "Pencarian", path: "/pencarian", key: "pencarian" },
-  { label: "Jasa Temenin", path: "#", key: "jasa" },
+  { label: "Jasa Temenin", path: "/jasa-temenin", key: "jasa" },
   { label: "Pesanan", path: "/pesanan", key: "pesanan" },
   { label: "Profil", path: "#", key: "profil" },
 ] as const;

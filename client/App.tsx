@@ -13,6 +13,18 @@ import Masuk from "./pages/Masuk";
 import DaftarProvider from "./pages/DaftarProvider";
 import DashboardPengguna from "./pages/DashboardPengguna";
 import Pencarian from "./pages/Pencarian";
+import JasaTemenin from "./pages/JasaTemenin";
+import JasaTemeninPilih from "./pages/JasaTemeninPilih";
+import JasaTemeninCari from "./pages/JasaTemeninCari";
+import JasaTemeninPesan from "./pages/JasaTemeninPesan";
+import JasaCurhatPilih from "./pages/JasaCurhatPilih";
+import JasaCurhatAnonim from "./pages/JasaCurhatAnonim";
+import JasaCurhatAnonimChat from "./pages/JasaCurhatAnonimChat";
+import JasaBantu from "./pages/JasaBantu";
+import JasaBantuAmbilRapor from "./pages/JasaBantuAmbilRapor";
+import JasaBantuPilihHelper from "./pages/JasaBantuPilihHelper";
+import JasaBantuPembayaran from "./pages/JasaBantuPembayaran";
+import JasaBantuAntriMewakili from "./pages/JasaBantuAntriMewakili";
 import Pesanan from "./pages/Pesanan";
 import DetailPesanan from "./pages/DetailPesanan";
 import BeriUlasan from "./pages/BeriUlasan";
@@ -44,6 +56,40 @@ const App = () => (
           <Route path="/dashboard-penyedia" element={<DashboardPenyedia />} />
           <Route path="/profil-penyedia" element={<ProfilPenyedia />} />
           <Route path="/pencarian" element={<Pencarian />} />
+          <Route path="/jasa-temenin" element={<JasaTemenin />} />
+          <Route path="/jasa-temenin/pilih" element={<JasaTemeninPilih />} />
+          <Route path="/jasa-temenin/cari/:mode" element={<JasaTemeninCari />} />
+          <Route
+            path="/jasa-temenin/pesan/:mode/:companionId"
+            element={<JasaTemeninPesan />}
+          />
+          <Route path="/jasa-curhat/pilih" element={<JasaCurhatPilih />} />
+          <Route path="/jasa-curhat/anonim" element={<JasaCurhatAnonim />} />
+          <Route
+            path="/jasa-curhat/anonim/:listenerId"
+            element={<JasaCurhatAnonimChat />}
+          />
+          <Route path="/jasa-bantu" element={<JasaBantu />} />
+          <Route
+            path="/jasa-bantu/ambil-rapor"
+            element={<JasaBantuAmbilRapor />}
+          />
+          <Route
+            path="/jasa-bantu/ambil-rapor/helper"
+            element={<JasaBantuPilihHelper />}
+          />
+          <Route
+            path="/jasa-bantu/ambil-rapor/pembayaran"
+            element={<JasaBantuPembayaran />}
+          />
+          <Route
+            path="/jasa-bantu/antri-mewakili"
+            element={<JasaBantuAntriMewakili />}
+          />
+          <Route
+            path="/jasa-bantu/antri-mewakili/pembayaran"
+            element={<JasaBantuPembayaran />}
+          />
           <Route path="/pesanan" element={<Pesanan />} />
           <Route path="/pesanan/:id" element={<DetailPesanan />} />
           <Route path="/pesanan/:id/ulasan" element={<BeriUlasan />} />

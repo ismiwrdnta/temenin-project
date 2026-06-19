@@ -60,7 +60,7 @@ export default function BeriUlasan() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!canSubmit || !order) return;
-    submitReview(order.id);
+    submitReview(order.id, overallRating);
     navigate("/pesanan", { replace: true });
   };
 

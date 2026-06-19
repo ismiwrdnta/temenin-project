@@ -4,7 +4,6 @@ import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useAuth } from "@/context/AuthContext";
-import { registerUser } from "@/lib/authApi";
 import { GoogleAuthButton } from "@/components/GoogleAuthButton";
 import {
   Form,
@@ -32,10 +31,8 @@ type RegisterFormValues = z.infer<typeof registerSchema>;
 
 export default function Daftar() {
   const [role, setRole] = useState<Role>("pengguna");
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
-  const { setSession } = useAuth();
+  const { loginLocal } = useAuth();
 
   const form = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
@@ -47,29 +44,17 @@ export default function Daftar() {
     },
   });
 
-  async function onSubmit(data: RegisterFormValues) {
-    setSubmitError(null);
-    setIsSubmitting(true);
-    try {
-      const session = await registerUser({
-        name: data.name,
-        email: data.email,
-        phone: data.phone,
-        password: data.password,
-        role,
-      });
-      setSession(session.token, session.user);
-      if (role === "penyedia") {
-        navigate("/daftar-provider");
-      } else {
-        navigate("/otp", { state: { email: session.user.email } });
-      }
-    } catch (err) {
-      setSubmitError(
-        err instanceof Error ? err.message : "Gagal mendaftar. Coba lagi.",
-      );
-    } finally {
-      setIsSubmitting(false);
+  function onSubmit(data: RegisterFormValues) {
+    loginLocal({
+      name: data.name,
+      email: data.email,
+      phone: data.phone,
+      role,
+    });
+    if (role === "penyedia") {
+      navigate("/daftar-provider");
+    } else {
+      navigate("/otp", { state: { email: data.email } });
     }
   }
 
@@ -226,19 +211,12 @@ export default function Daftar() {
             />
 
             {/* Masuk Sekarang Button */}
-            {submitError && (
-              <p className="text-red-500 text-sm text-center mt-2" role="alert">
-                {submitError}
-              </p>
-            )}
-
             <button
               type="submit"
-              disabled={isSubmitting}
-              className="w-full py-4 rounded-xl text-white font-semibold text-lg mt-4 mb-5 hover:opacity-90 transition-opacity disabled:opacity-60"
+              className="w-full py-4 rounded-xl text-white font-semibold text-lg mt-4 mb-5 hover:opacity-90 transition-opacity"
               style={{ background: 'linear-gradient(90deg, #E91E8C 0%, #A131CC 100%)' }}
             >
-              {isSubmitting ? "Memproses..." : "Daftar Sekarang"}
+              Daftar Sekarang
             </button>
           </form>
         </Form>

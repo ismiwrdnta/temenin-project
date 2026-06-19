@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect, KeyboardEvent, ChangeEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
-import { maskEmail } from "@/lib/authApi";
+import { maskEmail } from "@/lib/email";
 
 const OTP_LENGTH = 6;
 const RESEND_SECONDS = 165; // 2:45

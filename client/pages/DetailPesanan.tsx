@@ -9,6 +9,9 @@ import {
   X,
 } from "lucide-react";
 import AppNavbar from "@/components/AppNavbar";
+import ProviderNavbar from "@/components/ProviderNavbar";
+import { useAuth } from "@/context/AuthContext";
+import { normalizeName } from "@/lib/provider-link";
 import { useOrders } from "@/context/OrderContext";
 import {
   STATUS_CONFIG,
@@ -16,6 +19,27 @@ import {
   type Order,
 } from "@/data/orders";
 import { cn } from "@/lib/utils";
+
+function PendingBanner({ order }: { order: Order }) {
+  if (order.status !== "pending") return null;
+
+  return (
+    <div className="bg-[#FEFCE8] border border-[#FACC15] rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div>
+        <h2 className="text-[#CA8A04] font-bold text-base">
+          Menunggu Konfirmasi Penyedia
+        </h2>
+        <p className="text-[#64748B] text-sm mt-1">
+          Pesananmu sedang ditinjau oleh {order.providerName}. Chat akan aktif
+          setelah penyedia menerima pesanan.
+        </p>
+      </div>
+      <span className="self-start sm:self-center text-xs font-semibold px-3 py-1 rounded-full bg-[#FEF9C3] text-[#CA8A04]">
+        Menunggu
+      </span>
+    </div>
+  );
+}
 
 function SessionBanner({ order }: { order: Order }) {
   if (order.status !== "berlangsung") return null;
@@ -153,10 +177,22 @@ function EscrowBanner({ order }: { order: Order }) {
   );
 }
 
-function LiveChat({ order }: { order: Order }) {
+function LiveChat({
+  order,
+  onSendMessage,
+}: {
+  order: Order;
+  onSendMessage: (text: string) => void;
+}) {
   const [message, setMessage] = useState("");
 
   if (order.status !== "berlangsung" || !order.chatMessages) return null;
+
+  const handleSend = () => {
+    if (!message.trim()) return;
+    onSendMessage(message);
+    setMessage("");
+  };
 
   return (
     <div className="bg-white rounded-2xl p-5 lg:p-6 shadow-sm border border-gray-100">
@@ -204,11 +240,18 @@ function LiveChat({ order }: { order: Order }) {
           type="text"
           value={message}
           onChange={(e) => setMessage(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              handleSend();
+            }
+          }}
           placeholder="Ketik pesan..."
           className="flex-1 h-11 px-4 bg-[#F8F9FA] rounded-xl border border-[#F3E8FF] text-sm text-[#2C1810] placeholder:text-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-[#E91E8C]/30"
         />
         <button
           type="button"
+          onClick={handleSend}
           className="w-11 h-11 rounded-full bg-[#E91E8C] hover:bg-[#D81B60] text-white flex items-center justify-center transition-colors flex-shrink-0"
           aria-label="Kirim pesan"
         >
@@ -337,7 +380,8 @@ function StatusTimeline({ order }: { order: Order }) {
 
 export default function DetailPesanan() {
   const { id } = useParams<{ id: string }>();
-  const { getOrderById, completeSession } = useOrders();
+  const { user } = useAuth();
+  const { getOrderById, completeSession, addChatMessage } = useOrders();
   const orderId = Number(id);
   const order = Number.isFinite(orderId) ? getOrderById(orderId) : undefined;
 
@@ -345,7 +389,17 @@ export default function DetailPesanan() {
     return <Navigate to="/pesanan" replace />;
   }
 
+  const isProviderView =
+    user?.role === "penyedia" &&
+    (order.companionId === user.companionId ||
+      normalizeName(order.providerName) === normalizeName(user.name));
+
+  if (user?.role === "penyedia" && !isProviderView) {
+    return <Navigate to="/dashboard-penyedia" replace />;
+  }
+
   const status = STATUS_CONFIG[order.status];
+  const backPath = isProviderView ? "/dashboard-penyedia" : "/pesanan";
 
   return (
     <div className="min-h-screen w-full bg-[#FFF8F5] font-['Poppins',sans-serif] flex flex-col">
@@ -354,16 +408,22 @@ export default function DetailPesanan() {
         <div className="absolute bottom-[-5%] right-[-5%] w-[30%] h-[30%] bg-[#F3E8FF] rounded-full blur-3xl opacity-50" />
       </div>
 
-      <AppNavbar activePage="pesanan" />
+      {isProviderView ? (
+        <div className="w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-10 pt-6">
+          <ProviderNavbar activePage="dashboard" />
+        </div>
+      ) : (
+        <AppNavbar activePage="pesanan" />
+      )}
 
       <main className="relative z-10 flex-1 w-full">
         <div className="w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-10 py-6 lg:py-8">
           <Link
-            to="/pesanan"
+            to={backPath}
             className="inline-flex items-center gap-2 text-[#7C3AED] hover:text-[#6D28D9] text-sm font-medium mb-6 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
-            Kembali ke Pesanan
+            {isProviderView ? "Kembali ke Dashboard" : "Kembali ke Pesanan"}
           </Link>
 
           <div className="flex flex-wrap gap-3 mb-6">
@@ -377,7 +437,8 @@ export default function DetailPesanan() {
                 };
                 const isActive =
                   tab === "aktif"
-                    ? order.status === "berlangsung"
+                    ? order.status === "berlangsung" ||
+                      order.status === "pending"
                     : tab === "selesai"
                       ? order.status === "selesai"
                       : tab === "dibatalkan"
@@ -407,6 +468,7 @@ export default function DetailPesanan() {
           </div>
 
           <div className="max-w-3xl mx-auto space-y-4">
+            <PendingBanner order={order} />
             <SessionBanner order={order} />
 
             {!order.remainingTime && order.status !== "berlangsung" && (
@@ -426,11 +488,16 @@ export default function DetailPesanan() {
             <ProviderCard order={order} />
             <OrderSummary order={order} />
             <EscrowBanner order={order} />
-            <LiveChat order={order} />
-            <DetailActions
+            <LiveChat
               order={order}
-              onConfirmComplete={completeSession}
+              onSendMessage={(text) => addChatMessage(order.id, text)}
             />
+            {!isProviderView && (
+              <DetailActions
+                order={order}
+                onConfirmComplete={completeSession}
+              />
+            )}
             <StatusTimeline order={order} />
           </div>
         </div>

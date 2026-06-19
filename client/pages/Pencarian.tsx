@@ -1,23 +1,12 @@
 import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import AppNavbar from "@/components/AppNavbar";
+import ProviderListCard from "@/components/ProviderListCard";
 import ProviderMap, { USER_LOCATION } from "@/components/ProviderMap";
+import { PROVIDERS } from "@/data/providers";
 import { cn } from "@/lib/utils";
 
 type Category = "semua" | "temenin" | "curhat" | "bantu";
-
-type Provider = {
-  id: number;
-  name: string;
-  initials: string;
-  tags: string[];
-  rating: number;
-  reviews: number;
-  price: string;
-  distance: string;
-  lat: number;
-  lng: number;
-};
 
 const CATEGORIES: { key: Category; label: string }[] = [
   { key: "semua", label: "Semua" },
@@ -26,141 +15,13 @@ const CATEGORIES: { key: Category; label: string }[] = [
   { key: "bantu", label: "Bantu" },
 ];
 
-const MOCK_PROVIDERS: Provider[] = [
-  {
-    id: 1,
-    name: "Rafi Ananda",
-    initials: "RA",
-    tags: ["Temenin", "Curhat"],
-    rating: 4.88,
-    reviews: 83,
-    price: "70rb/Jam",
-    distance: "1.2 km",
-    lat: -6.9082,
-    lng: 107.6154,
-  },
-  {
-    id: 2,
-    name: "Risna",
-    initials: "RI",
-    tags: ["Curhat", "Bantu"],
-    rating: 4.88,
-    reviews: 61,
-    price: "70rb/Jam",
-    distance: "0.8 km",
-    lat: -6.9118,
-    lng: 107.6172,
-  },
-  {
-    id: 3,
-    name: "Bimo Pratama",
-    initials: "BP",
-    tags: ["Temenin", "Bantu"],
-    rating: 4.75,
-    reviews: 45,
-    price: "65rb/Jam",
-    distance: "2.1 km",
-    lat: -6.9235,
-    lng: 107.6021,
-  },
-  {
-    id: 4,
-    name: "Ismi Wardanita",
-    initials: "IW",
-    tags: ["Curhat", "Bantu"],
-    rating: 4.88,
-    reviews: 61,
-    price: "70rb/Jam",
-    distance: "0.8 km",
-    lat: -6.9105,
-    lng: 107.6148,
-  },
-  {
-    id: 5,
-    name: "Ima",
-    initials: "IM",
-    tags: ["Temenin", "Bantu"],
-    rating: 4.75,
-    reviews: 45,
-    price: "65rb/Jam",
-    distance: "2.1 km",
-    lat: -6.9268,
-    lng: 107.6115,
-  },
-];
-
-function ProviderCard({
-  provider,
-  isHighlighted,
-  onHover,
-}: {
-  provider: Provider;
-  isHighlighted?: boolean;
-  onHover?: (id: number | null) => void;
-}) {
-  return (
-    <div
-      className={cn(
-        "bg-white rounded-2xl p-4 lg:p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 shadow-sm border transition-colors cursor-default",
-        isHighlighted
-          ? "border-[#E91E8C] ring-2 ring-[#E91E8C]/20"
-          : "border-gray-100",
-      )}
-      onMouseEnter={() => onHover?.(provider.id)}
-      onMouseLeave={() => onHover?.(null)}
-    >
-      <div className="flex items-center gap-4 min-w-0">
-        <div className="w-12 h-12 rounded-full bg-[#FBCFE8] flex items-center justify-center text-[#E91E8C] font-bold text-sm flex-shrink-0">
-          {provider.initials}
-        </div>
-        <div className="min-w-0">
-          <h4 className="text-[#4C1D95] font-bold text-base">{provider.name}</h4>
-
-          <div className="flex flex-wrap gap-2 mt-1.5 mb-1.5">
-            {provider.tags.map((tag) => (
-              <span
-                key={tag}
-                className="bg-[#FDF4FF] text-[#E91E8C] text-[10px] font-medium px-2.5 py-0.5 rounded-full border border-[#FBCFE8]"
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
-
-          <div className="flex items-center gap-2 text-xs flex-wrap">
-            <div className="flex items-center gap-1">
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="#2C1810"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" />
-              </svg>
-              <span className="font-bold text-[#2C1810]">{provider.rating}</span>
-              <span className="text-[#94A3B8]">({provider.reviews})</span>
-            </div>
-            <span className="text-[#94A3B8]">-</span>
-            <span className="font-bold text-[#4C1D95]">{provider.price}</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="text-[#94A3B8] text-xs font-medium sm:text-right flex-shrink-0">
-        {provider.distance}
-      </div>
-    </div>
-  );
-}
-
 export default function Pencarian() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState<Category>("semua");
   const [highlightedId, setHighlightedId] = useState<number | null>(null);
 
   const filteredProviders = useMemo(() => {
-    return MOCK_PROVIDERS.filter((provider) => {
+    return PROVIDERS.filter((provider) => {
       const matchesSearch =
         searchQuery.trim() === "" ||
         provider.name.toLowerCase().includes(searchQuery.trim().toLowerCase());
@@ -172,7 +33,7 @@ export default function Pencarian() {
         );
 
       return matchesSearch && matchesCategory;
-    });
+    }).sort((a, b) => a.distanceKm - b.distanceKm);
   }, [searchQuery, activeCategory]);
 
   return (
@@ -245,7 +106,7 @@ export default function Pencarian() {
                 </p>
                 <div className="flex flex-col gap-4">
                   {filteredProviders.map((provider) => (
-                    <ProviderCard
+                    <ProviderListCard
                       key={provider.id}
                       provider={provider}
                       isHighlighted={highlightedId === provider.id}

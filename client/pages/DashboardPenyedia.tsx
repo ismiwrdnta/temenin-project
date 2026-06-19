@@ -1,80 +1,15 @@
-import { useMemo, useState } from "react";
-import { Navigate } from "react-router-dom";
+import { useMemo } from "react";
+import { Navigate, useNavigate } from "react-router-dom";
 import { MessageCircle, Phone, Star } from "lucide-react";
 import ProviderNavbar from "@/components/ProviderNavbar";
 import { useAuth } from "@/context/AuthContext";
+import { useOrders } from "@/context/OrderContext";
+import { formatRupiah, getOrdersForProvider, type Order } from "@/data/orders";
 import { cn } from "@/lib/utils";
 
-type TransactionStatus = "pending" | "berlangsung" | "dibatalkan" | "selesai";
+function StatusBadge({ status }: { status: Order["status"] }) {
+  if (status === "pending") return null;
 
-type ProviderTransaction = {
-  id: number;
-  userName: string;
-  userInitials: string;
-  location: string;
-  service: string;
-  schedule: string;
-  price: number;
-  status: TransactionStatus;
-  feedback?: number;
-};
-
-const MOCK_TRANSACTIONS: ProviderTransaction[] = [
-  {
-    id: 1,
-    userName: "Nama User",
-    userInitials: "NU",
-    location: "Pesanggrahan, Jakarta Selatan",
-    service: "Bantu Ambil Rapor",
-    schedule: "Selasa, 19 Mei 2026",
-    price: 35000,
-    status: "pending",
-  },
-  {
-    id: 2,
-    userName: "Nama User",
-    userInitials: "NU",
-    location: "Pesanggrahan, Jakarta Selatan",
-    service: "Bantu Ambil Rapor",
-    schedule: "Jumat, 15 Mei 2026",
-    price: 35000,
-    status: "berlangsung",
-  },
-  {
-    id: 3,
-    userName: "Nama User",
-    userInitials: "NU",
-    location: "Pesanggrahan, Jakarta Selatan",
-    service: "Bantu Ambil Rapor",
-    schedule: "Jumat, 15 Mei 2026",
-    price: 35000,
-    status: "dibatalkan",
-  },
-  {
-    id: 4,
-    userName: "Nama User",
-    userInitials: "NU",
-    location: "Pesanggrahan, Jakarta Selatan",
-    service: "Bantu Ambil Rapor",
-    schedule: "Jumat, 15 Mei 2026",
-    price: 35000,
-    status: "selesai",
-    feedback: 5.0,
-  },
-];
-
-function formatRupiah(amount: number) {
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  })
-    .format(amount)
-    .replace("Rp", "Rp ");
-}
-
-function StatusBadge({ status }: { status: TransactionStatus }) {
   const config = {
     berlangsung: {
       label: "Berlangsung",
@@ -90,8 +25,6 @@ function StatusBadge({ status }: { status: TransactionStatus }) {
     },
   } as const;
 
-  if (status === "pending") return null;
-
   const { label, className } = config[status];
   return (
     <span
@@ -106,27 +39,29 @@ function StatusBadge({ status }: { status: TransactionStatus }) {
 }
 
 function TransactionActions({
-  transaction,
+  order,
   onAccept,
   onReject,
+  onChat,
 }: {
-  transaction: ProviderTransaction;
+  order: Order;
   onAccept: (id: number) => void;
   onReject: (id: number) => void;
+  onChat: (id: number) => void;
 }) {
-  if (transaction.status === "pending") {
+  if (order.status === "pending") {
     return (
       <div className="flex items-center gap-2">
         <button
           type="button"
-          onClick={() => onAccept(transaction.id)}
+          onClick={() => onAccept(order.id)}
           className="px-4 py-1.5 rounded-lg bg-[#22C55E] hover:bg-[#16A34A] text-white text-xs font-semibold transition-colors"
         >
           Terima
         </button>
         <button
           type="button"
-          onClick={() => onReject(transaction.id)}
+          onClick={() => onReject(order.id)}
           className="px-4 py-1.5 rounded-lg bg-[#EF4444] hover:bg-[#DC2626] text-white text-xs font-semibold transition-colors"
         >
           Tolak
@@ -135,7 +70,7 @@ function TransactionActions({
     );
   }
 
-  if (transaction.status === "berlangsung") {
+  if (order.status === "berlangsung") {
     return (
       <div className="flex items-center gap-3">
         <button
@@ -147,52 +82,59 @@ function TransactionActions({
         </button>
         <button
           type="button"
+          onClick={() => onChat(order.id)}
           className="w-9 h-9 rounded-full bg-[#FDF4FF] border border-[#FBCFE8] flex items-center justify-center text-[#7C3AED] hover:bg-[#FCE7F3] transition-colors"
           aria-label="Chat"
         >
           <MessageCircle className="w-4 h-4" />
         </button>
-        <StatusBadge status={transaction.status} />
+        <StatusBadge status={order.status} />
       </div>
     );
   }
 
-  if (transaction.status === "selesai") {
+  if (order.status === "selesai") {
     return (
       <div className="flex items-center gap-3">
-        <div className="flex items-center gap-1 text-[#2C1810]">
-          <Star className="w-4 h-4 fill-[#FACC15] text-[#FACC15]" />
-          <span className="text-xs font-bold">
-            {transaction.feedback?.toFixed(1)} Feedback
-          </span>
-        </div>
-        <StatusBadge status={transaction.status} />
+        {order.reviewRating != null && (
+          <div className="flex items-center gap-1 text-[#2C1810]">
+            <Star className="w-4 h-4 fill-[#FACC15] text-[#FACC15]" />
+            <span className="text-xs font-bold">
+              {order.reviewRating.toFixed(1)} Feedback
+            </span>
+          </div>
+        )}
+        <StatusBadge status={order.status} />
       </div>
     );
   }
 
-  return <StatusBadge status={transaction.status} />;
+  return <StatusBadge status={order.status} />;
 }
 
 function TransactionRow({
-  transaction,
+  order,
   onAccept,
   onReject,
+  onChat,
 }: {
-  transaction: ProviderTransaction;
+  order: Order;
   onAccept: (id: number) => void;
   onReject: (id: number) => void;
+  onChat: (id: number) => void;
 }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[minmax(180px,1.4fr)_minmax(120px,1fr)_minmax(140px,1fr)_minmax(90px,0.7fr)_minmax(160px,1.2fr)] gap-4 lg:gap-3 items-center py-5 border-b border-[#FBCFE8]/40 last:border-b-0">
       <div className="flex items-center gap-3 min-w-0">
-        <div className="w-10 h-10 rounded-full bg-[#EDE9FE] border border-[#DDD6FE] flex-shrink-0" />
+        <div className="w-10 h-10 rounded-full bg-[#EDE9FE] border border-[#DDD6FE] flex items-center justify-center text-[#7C3AED] font-bold text-xs flex-shrink-0">
+          {order.userInitials}
+        </div>
         <div className="min-w-0">
           <p className="text-[#2C1810] font-bold text-sm truncate">
-            {transaction.userName}
+            {order.userName}
           </p>
           <p className="text-[#94A3B8] text-xs truncate">
-            {transaction.location}
+            {order.userLocation}
           </p>
         </div>
       </div>
@@ -201,38 +143,67 @@ function TransactionRow({
         <p className="text-[#94A3B8] text-xs font-medium lg:hidden mb-0.5">
           Jasa
         </p>
-        <p className="text-[#2C1810] text-sm font-medium">
-          {transaction.service}
-        </p>
+        <p className="text-[#2C1810] text-sm font-medium">{order.service}</p>
       </div>
 
       <div className="lg:text-left">
         <p className="text-[#94A3B8] text-xs font-medium lg:hidden mb-0.5">
           Jadwal
         </p>
-        <p className="text-[#2C1810] text-sm">{transaction.schedule}</p>
+        <p className="text-[#2C1810] text-sm">{order.datetimeRange}</p>
       </div>
 
       <div className="lg:text-left">
         <p className="text-[#2C1810] text-sm font-bold">
-          {formatRupiah(transaction.price)}
+          {formatRupiah(order.price)}
         </p>
       </div>
 
       <div className="flex lg:justify-end">
         <TransactionActions
-          transaction={transaction}
+          order={order}
           onAccept={onAccept}
           onReject={onReject}
+          onChat={onChat}
         />
       </div>
     </div>
   );
 }
 
+const STATUS_SORT: Record<Order["status"], number> = {
+  pending: 0,
+  berlangsung: 1,
+  selesai: 2,
+  dibatalkan: 3,
+};
+
 export default function DashboardPenyedia() {
+  const navigate = useNavigate();
   const { user, isAuthenticated, isLoading } = useAuth();
-  const [transactions, setTransactions] = useState(MOCK_TRANSACTIONS);
+  const { orders, acceptOrder, rejectOrder } = useOrders();
+
+  const providerOrders = useMemo(() => {
+    if (!user) return [];
+    return getOrdersForProvider(orders, {
+      name: user.name,
+      companionId: user.companionId,
+    }).sort(
+      (a, b) => STATUS_SORT[a.status] - STATUS_SORT[b.status],
+    );
+  }, [orders, user]);
+
+  const stats = useMemo(() => {
+    const upcoming = providerOrders.filter(
+      (o) => o.status === "pending" || o.status === "berlangsung",
+    ).length;
+    const completed = providerOrders.filter((o) => o.status === "selesai").length;
+    const totalIncome = providerOrders
+      .filter((o) => o.status === "selesai")
+      .reduce((sum, o) => sum + o.price, 0);
+
+    return { upcoming, completed, totalIncome };
+  }, [providerOrders]);
 
   if (isLoading) {
     return (
@@ -249,34 +220,6 @@ export default function DashboardPenyedia() {
   if (user.role !== "penyedia") {
     return <Navigate to="/dashboard" replace />;
   }
-
-  const stats = useMemo(() => {
-    const upcoming = transactions.filter(
-      (t) => t.status === "pending" || t.status === "berlangsung",
-    ).length;
-    const completed = transactions.filter((t) => t.status === "selesai").length;
-    const totalIncome = transactions
-      .filter((t) => t.status === "selesai")
-      .reduce((sum, t) => sum + t.price, 0);
-
-    return { upcoming, completed, totalIncome };
-  }, [transactions]);
-
-  const handleAccept = (id: number) => {
-    setTransactions((prev) =>
-      prev.map((t) =>
-        t.id === id ? { ...t, status: "berlangsung" as const } : t,
-      ),
-    );
-  };
-
-  const handleReject = (id: number) => {
-    setTransactions((prev) =>
-      prev.map((t) =>
-        t.id === id ? { ...t, status: "dibatalkan" as const } : t,
-      ),
-    );
-  };
 
   return (
     <div className="min-h-screen w-full bg-[#FFFCF9] font-['Poppins',sans-serif] flex flex-col">
@@ -327,13 +270,14 @@ export default function DashboardPenyedia() {
             </div>
 
             <div className="px-4 sm:px-6">
-              {transactions.length > 0 ? (
-                transactions.map((transaction) => (
+              {providerOrders.length > 0 ? (
+                providerOrders.map((order) => (
                   <TransactionRow
-                    key={transaction.id}
-                    transaction={transaction}
-                    onAccept={handleAccept}
-                    onReject={handleReject}
+                    key={order.id}
+                    order={order}
+                    onAccept={acceptOrder}
+                    onReject={rejectOrder}
+                    onChat={(id) => navigate(`/pesanan/${id}`)}
                   />
                 ))
               ) : (
@@ -341,14 +285,18 @@ export default function DashboardPenyedia() {
                   <p className="text-[#64748B] font-medium text-sm">
                     Belum ada transaksi
                   </p>
-                  <p className="text-[#94A3B8] text-xs mt-1">
-                    Transaksi dari pengguna akan muncul di sini.
+                  <p className="text-[#94A3B8] text-xs mt-1 max-w-sm mx-auto">
+                    Pesanan dari pengguna akan muncul di sini setelah mereka
+                    memesan Temanian dengan nama yang sama seperti akunmu
+                    {user.companionId
+                      ? ` (ID: ${user.companionId})`
+                      : " (daftar ulang sebagai Rafi Ananda / Bimo Pratama)"}
+                    .
                   </p>
                 </div>
               )}
             </div>
           </section>
-
         </div>
       </main>
     </div>
