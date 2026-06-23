@@ -31,8 +31,10 @@ type RegisterFormValues = z.infer<typeof registerSchema>;
 
 export default function Daftar() {
   const [role, setRole] = useState<Role>("pengguna");
+  const [serverError, setServerError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
-  const { loginLocal } = useAuth();
+  const { registerRemote } = useAuth();
 
   const form = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
@@ -44,17 +46,35 @@ export default function Daftar() {
     },
   });
 
-  function onSubmit(data: RegisterFormValues) {
-    loginLocal({
-      name: data.name,
-      email: data.email,
-      phone: data.phone,
-      role,
-    });
-    if (role === "penyedia") {
-      navigate("/daftar-provider");
-    } else {
-      navigate("/otp", { state: { email: data.email } });
+  async function onSubmit(data: RegisterFormValues) {
+    setServerError(null);
+    setIsSubmitting(true);
+
+    try {
+      // Register dulu ke backend asli — baru setelah akun benar-benar
+      // tersimpan di database, lanjut ke langkah berikutnya. Ini beda
+      // dari versi lama yang langsung loginLocal() tanpa menunggu apapun.
+      await registerRemote({
+        email: data.email,
+        password: data.password,
+        name: data.name,
+        phone: data.phone,
+        role,
+      });
+
+      if (role === "penyedia") {
+        // Akun provider sudah tersimpan di backend (status verifikasi
+        // masih 'pending' secara default). Lanjut ke form detail profil.
+        navigate("/daftar-provider");
+      } else {
+        navigate("/otp", { state: { email: data.email } });
+      }
+    } catch (err) {
+      setServerError(
+        err instanceof Error ? err.message : "Gagal mendaftar. Coba lagi.",
+      );
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
@@ -126,10 +146,16 @@ export default function Daftar() {
           </div>
         </div>
 
+        {serverError && (
+          <div className="w-full px-4 py-3 mb-5 rounded-xl bg-[#FEF2F2] border border-[#FECACA] text-[#DC2626] text-sm">
+            {serverError}
+          </div>
+        )}
+
         {/* Form */}
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="w-full flex flex-col gap-5 mb-3">
-            
+
             {/* Nama Lengkap */}
             <FormField
               control={form.control}
@@ -210,13 +236,14 @@ export default function Daftar() {
               )}
             />
 
-            {/* Masuk Sekarang Button */}
+            {/* Daftar Sekarang Button */}
             <button
               type="submit"
-              className="w-full py-4 rounded-xl text-white font-semibold text-lg mt-4 mb-5 hover:opacity-90 transition-opacity"
+              disabled={isSubmitting}
+              className="w-full py-4 rounded-xl text-white font-semibold text-lg mt-4 mb-5 hover:opacity-90 transition-opacity disabled:opacity-60"
               style={{ background: 'linear-gradient(90deg, #E91E8C 0%, #A131CC 100%)' }}
             >
-              Daftar Sekarang
+              {isSubmitting ? "Memproses..." : "Daftar Sekarang"}
             </button>
           </form>
         </Form>

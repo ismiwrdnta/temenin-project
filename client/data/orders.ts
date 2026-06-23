@@ -1,7 +1,7 @@
 export type OrderStatus = "pending" | "berlangsung" | "selesai" | "dibatalkan";
 
 export type ChatMessage = {
-  id: number;
+  id: string | number;
   sender: "user" | "provider";
   text: string;
   time: string;
@@ -15,8 +15,8 @@ export type StatusHistoryItem = {
 };
 
 export type Order = {
-  id: number;
-  companionId: number;
+  id: string | number;
+  companionId?: string | number;
   providerName: string;
   initials: string;
   userName: string;

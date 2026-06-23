@@ -95,7 +95,7 @@ function AnonimIcon() {
 export default function JasaCurhatPilih() {
   const navigate = useNavigate();
   const { user, isAuthenticated, isLoading } = useAuth();
-  const [selected, setSelected] = useState<CurhatMode>("anonim");
+  const [selected, setSelected] = useState<CurhatMode>("reguler");
 
   if (isLoading) {
     return (
@@ -201,7 +201,7 @@ export default function JasaCurhatPilih() {
               if (selected === "anonim") {
                 navigate("/jasa-curhat/anonim");
               } else {
-                navigate("/pencarian");
+                navigate("/jasa-curhat/reguler");
               }
             }}
             className="w-full py-4 rounded-xl border-2 border-[#2C1810] bg-white text-[#2C1810] font-semibold text-base hover:bg-[#F5EBE0] transition-colors"

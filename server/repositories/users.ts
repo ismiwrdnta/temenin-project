@@ -97,3 +97,20 @@ export async function updateUserRole(
   );
   return result.rows[0] ?? null;
 }
+
+export async function markEmailVerified(id: string): Promise<void> {
+  const pool = getPool();
+  await pool.query(
+    `UPDATE users SET email_verified = true, updated_at = NOW() WHERE id = $1`,
+    [id],
+  );
+}
+
+export async function isEmailVerified(id: string): Promise<boolean> {
+  const pool = getPool();
+  const result = await pool.query<{ email_verified: boolean }>(
+    `SELECT email_verified FROM users WHERE id = $1`,
+    [id],
+  );
+  return result.rows[0]?.email_verified ?? false;
+}

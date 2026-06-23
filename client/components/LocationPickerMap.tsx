@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
-import { USER_LOCATION } from "@/components/ProviderMap";
+import { DEFAULT_MAP_CENTER } from "@/lib/geolocation";
 
 export type PickedLocation = {
   lat: number;
@@ -48,11 +48,15 @@ export default function LocationPickerMap({
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
+  // Keep onChange in a ref so the map initialization effect doesn't re-run
+  const onChangeRef = useRef(onChange);
+  useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
 
+  // Initialize map once
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
-    const initial = value ?? USER_LOCATION;
+    const initial = value ?? DEFAULT_MAP_CENTER;
     const map = L.map(containerRef.current, {
       center: [initial.lat, initial.lng],
       zoom: 13,
@@ -67,11 +71,20 @@ export default function LocationPickerMap({
     const marker = L.marker([initial.lat, initial.lng], {
       icon: createPinIcon(markerLabel),
       zIndexOffset: 1000,
+      draggable: true,
     }).addTo(map);
 
+    // Drag support – move the pin anywhere on the map
+    marker.on("dragend", () => {
+      const latlng = marker.getLatLng();
+      onChangeRef.current({ lat: latlng.lat, lng: latlng.lng });
+    });
+
+    // Click on map also moves the pin
     map.on("click", (e) => {
       const next = { lat: e.latlng.lat, lng: e.latlng.lng };
-      onChange(next);
+      marker.setLatLng([next.lat, next.lng]);
+      onChangeRef.current(next);
     });
 
     mapRef.current = map;
@@ -83,8 +96,10 @@ export default function LocationPickerMap({
       mapRef.current = null;
       markerRef.current = null;
     };
-  }, [onChange, value, markerLabel]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // intentionally run once on mount
 
+  // Sync marker position when value changes from outside
   useEffect(() => {
     const marker = markerRef.current;
     const map = mapRef.current;
@@ -98,7 +113,9 @@ export default function LocationPickerMap({
         ref={containerRef}
         className="h-[220px] w-full rounded-xl overflow-hidden border border-[#E5E7EB]"
       />
+      <p className="text-xs text-[#94A3B8] mt-1.5">
+        💡 Klik pada peta atau geser pin untuk memilih lokasi
+      </p>
     </div>
   );
 }
-

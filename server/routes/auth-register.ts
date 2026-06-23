@@ -5,6 +5,7 @@ import { isJwtConfigured } from "../lib/jwt";
 import { hashPassword } from "../lib/password";
 import { sendAuthResponse } from "../lib/auth-response";
 import { createUser, findUserByEmail } from "../repositories/users";
+import { createProviderProfile } from "../repositories/providers";
 
 const registerSchema = z.object({
   name: z.string().min(3),
@@ -47,6 +48,11 @@ export const handleRegister: RequestHandler = async (req, res) => {
       emailVerified: false,
     });
 
+    if (role === "penyedia") {
+      await createProviderProfile(user.id);
+    }
+
+    // OTP dikirim dari halaman /otp via POST /api/auth/send-otp
     sendAuthResponse(res, user, 201);
   } catch (error) {
     console.error("Register error:", error);

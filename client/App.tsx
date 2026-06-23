@@ -18,6 +18,8 @@ import JasaTemeninPilih from "./pages/JasaTemeninPilih";
 import JasaTemeninCari from "./pages/JasaTemeninCari";
 import JasaTemeninPesan from "./pages/JasaTemeninPesan";
 import JasaCurhatPilih from "./pages/JasaCurhatPilih";
+import JasaCurhatReguler from "./pages/JasaCurhatReguler";
+import JasaCurhatPesan from "./pages/JasaCurhatPesan";
 import JasaCurhatAnonim from "./pages/JasaCurhatAnonim";
 import JasaCurhatAnonimChat from "./pages/JasaCurhatAnonimChat";
 import JasaBantu from "./pages/JasaBantu";
@@ -25,11 +27,14 @@ import JasaBantuAmbilRapor from "./pages/JasaBantuAmbilRapor";
 import JasaBantuPilihHelper from "./pages/JasaBantuPilihHelper";
 import JasaBantuPembayaran from "./pages/JasaBantuPembayaran";
 import JasaBantuAntriMewakili from "./pages/JasaBantuAntriMewakili";
+import JasaBantuBelanjaTitip from "./pages/JasaBantuBelanjaTitip";
+import JasaBantuBelanjaTitipPembayaran from "./pages/JasaBantuBelanjaTitipPembayaran";
 import Pesanan from "./pages/Pesanan";
 import DetailPesanan from "./pages/DetailPesanan";
 import BeriUlasan from "./pages/BeriUlasan";
 import DashboardPenyedia from "./pages/DashboardPenyedia";
 import ProfilPenyedia from "./pages/ProfilPenyedia";
+import WalletPenyedia from "./pages/WalletPenyedia";
 import { AuthProvider } from "@/context/AuthContext";
 import { GoogleOAuthShell } from "@/components/GoogleOAuthShell";
 import { OrderProvider } from "@/context/OrderContext";
@@ -55,6 +60,7 @@ const App = () => (
           <Route path="/dashboard" element={<DashboardPengguna />} />
           <Route path="/dashboard-penyedia" element={<DashboardPenyedia />} />
           <Route path="/profil-penyedia" element={<ProfilPenyedia />} />
+          <Route path="/wallet-penyedia" element={<WalletPenyedia />} />
           <Route path="/pencarian" element={<Pencarian />} />
           <Route path="/jasa-temenin" element={<JasaTemenin />} />
           <Route path="/jasa-temenin/pilih" element={<JasaTemeninPilih />} />
@@ -64,6 +70,11 @@ const App = () => (
             element={<JasaTemeninPesan />}
           />
           <Route path="/jasa-curhat/pilih" element={<JasaCurhatPilih />} />
+          <Route path="/jasa-curhat/reguler" element={<JasaCurhatReguler />} />
+          <Route
+            path="/jasa-curhat/pesan/:mode/:providerId"
+            element={<JasaCurhatPesan />}
+          />
           <Route path="/jasa-curhat/anonim" element={<JasaCurhatAnonim />} />
           <Route
             path="/jasa-curhat/anonim/:listenerId"
@@ -89,6 +100,14 @@ const App = () => (
           <Route
             path="/jasa-bantu/antri-mewakili/pembayaran"
             element={<JasaBantuPembayaran />}
+          />
+          <Route
+            path="/jasa-bantu/belanja-titip"
+            element={<JasaBantuBelanjaTitip />}
+          />
+          <Route
+            path="/jasa-bantu/belanja-titip/pembayaran"
+            element={<JasaBantuBelanjaTitipPembayaran />}
           />
           <Route path="/pesanan" element={<Pesanan />} />
           <Route path="/pesanan/:id" element={<DetailPesanan />} />

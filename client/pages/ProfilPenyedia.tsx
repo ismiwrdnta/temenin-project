@@ -1,8 +1,17 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { ChevronDown } from "lucide-react";
+import LocationPickerMap, {
+  type PickedLocation,
+} from "@/components/LocationPickerMap";
 import ProviderNavbar from "@/components/ProviderNavbar";
 import { useAuth } from "@/context/AuthContext";
+import {
+  fetchMyProviderProfile,
+  getInitials,
+  updateMyProviderProfile,
+} from "@/lib/bookingApi";
+import { DEFAULT_MAP_CENTER } from "@/lib/geolocation";
 import { cn } from "@/lib/utils";
 
 const SERVICE_OPTIONS = [
@@ -24,6 +33,48 @@ const DISTRICTS: Record<string, string[]> = {
   Padang: ["Koto Tangah", "Padang Utara"],
   Bandung: ["Coblong", "Bandung Wetan"],
 };
+
+const SERVICE_TO_CATEGORY: Record<
+  string,
+  "temenin" | "curhat" | "bantu_aktivitas"
+> = {
+  "Jasa Temenin": "temenin",
+  "Jasa Curhat": "curhat",
+  "Jasa Bantu Aktivitas": "bantu_aktivitas",
+};
+
+const CATEGORY_TO_SERVICE: Record<string, string> = {
+  temenin: "Jasa Temenin",
+  curhat: "Jasa Curhat",
+  bantu_aktivitas: "Jasa Bantu Aktivitas",
+};
+
+function parseAreaDescription(area?: string | null) {
+  if (!area) {
+    return { province: "Jawa Barat", city: "Bandung", district: "Coblong" };
+  }
+  const parts = area.split(",").map((p) => p.trim());
+  if (parts.length >= 3) {
+    return {
+      district: parts[0],
+      city: parts[1],
+      province: parts[2],
+    };
+  }
+  if (parts.length === 2) {
+    return { city: parts[0], province: parts[1], district: "" };
+  }
+  return { province: "Jawa Barat", city: parts[0] ?? "Bandung", district: "" };
+}
+
+function parseInterests(bio?: string | null): string[] {
+  if (!bio?.startsWith("Minat:")) return [];
+  return bio
+    .slice("Minat:".length)
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
 
 function SectionHeader({ title }: { title: string }) {
   return (
@@ -115,16 +166,67 @@ export default function ProfilPenyedia() {
   const [form, setForm] = useState({
     name: user?.name ?? "",
     email: user?.email ?? "",
-    phone: "081234567890",
-    password: "",
-    services: ["Jasa Temenin", "Jasa Curhat"],
-    interests: ["Olahraga", "Cafe"],
-    province: "Sumatera Barat",
-    city: "Padang Panjang",
-    district: "Padang Panjang Timur",
+    phone: "",
+    services: [] as string[],
+    interests: [] as string[],
+    province: "Jawa Barat",
+    city: "Bandung",
+    district: "Coblong",
   });
-
+  const [mapLocation, setMapLocation] = useState<PickedLocation>(
+    DEFAULT_MAP_CENTER,
+  );
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const profile = await fetchMyProviderProfile();
+        const area = parseAreaDescription(profile.area_description);
+        const lat = profile.latitude
+          ? parseFloat(String(profile.latitude))
+          : NaN;
+        const lng = profile.longitude
+          ? parseFloat(String(profile.longitude))
+          : NaN;
+
+        if (!cancelled) {
+          setForm({
+            name: profile.full_name ?? user?.name ?? "",
+            email: profile.email ?? user?.email ?? "",
+            phone: profile.phone ?? "",
+            services:
+              profile.categories
+                ?.map((c) => CATEGORY_TO_SERVICE[c])
+                .filter(Boolean) ?? [],
+            interests: parseInterests(profile.bio),
+            province: area.province,
+            city: area.city,
+            district: area.district || "Coblong",
+          });
+          if (Number.isFinite(lat) && Number.isFinite(lng)) {
+            setMapLocation({ lat, lng });
+          }
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(
+            err instanceof Error ? err.message : "Gagal memuat profil.",
+          );
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.email, user?.name]);
 
   if (user && user.role !== "penyedia") {
     return <Navigate to="/dashboard" replace />;
@@ -133,11 +235,48 @@ export default function ProfilPenyedia() {
   const cities = CITIES[form.province] ?? [];
   const districts = DISTRICTS[form.city] ?? [];
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
+    setError(null);
+    setSaving(true);
+
+    try {
+      const categories = form.services
+        .map((s) => SERVICE_TO_CATEGORY[s])
+        .filter(Boolean);
+      const areaParts = [form.district, form.city, form.province].filter(
+        Boolean,
+      );
+
+      await updateMyProviderProfile({
+        latitude: mapLocation.lat,
+        longitude: mapLocation.lng,
+        area_description: areaParts.join(", "),
+        categories,
+        bio:
+          form.interests.length > 0
+            ? `Minat: ${form.interests.join(", ")}`
+            : undefined,
+      });
+
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Gagal menyimpan perubahan.",
+      );
+    } finally {
+      setSaving(false);
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#FFFCF9] text-[#94A3B8]">
+        Memuat profil...
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen w-full bg-[#FFFCF9] font-['Poppins',sans-serif] flex flex-col">
@@ -152,13 +291,12 @@ export default function ProfilPenyedia() {
           <ProviderNavbar activePage="profil" />
 
           <form onSubmit={handleSave} className="mt-8 max-w-5xl mx-auto space-y-8">
-            {/* Informasi Umum */}
             <section>
               <SectionHeader title="Informasi Umum" />
               <div className="mt-4 grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-6 lg:gap-10">
                 <div className="aspect-square max-w-[220px] mx-auto lg:mx-0 w-full rounded-2xl border-2 border-[#E91E8C] bg-[#FAFAFA] flex items-center justify-center">
-                  <span className="text-[#94A3B8] text-sm font-medium text-center px-4">
-                    Profile picture
+                  <span className="text-[#E91E8C] font-bold text-3xl">
+                    {getInitials(form.name || "?")}
                   </span>
                 </div>
 
@@ -170,10 +308,8 @@ export default function ProfilPenyedia() {
                     <input
                       type="text"
                       value={form.name}
-                      onChange={(e) =>
-                        setForm({ ...form, name: e.target.value })
-                      }
-                      className="w-full bg-[#F5EBE0] border border-[#2C1810] rounded-xl px-4 py-3.5 text-[#2C1810] text-sm sm:text-base outline-none focus:border-[#7C3AED] transition-colors"
+                      readOnly
+                      className="w-full bg-[#F5EBE0]/60 border border-[#2C1810]/30 rounded-xl px-4 py-3.5 text-[#64748B] text-sm sm:text-base cursor-not-allowed"
                     />
                   </div>
                   <div>
@@ -183,10 +319,8 @@ export default function ProfilPenyedia() {
                     <input
                       type="email"
                       value={form.email}
-                      onChange={(e) =>
-                        setForm({ ...form, email: e.target.value })
-                      }
-                      className="w-full bg-[#F5EBE0] border border-[#2C1810] rounded-xl px-4 py-3.5 text-[#2C1810] text-sm sm:text-base outline-none focus:border-[#7C3AED] transition-colors"
+                      readOnly
+                      className="w-full bg-[#F5EBE0]/60 border border-[#2C1810]/30 rounded-xl px-4 py-3.5 text-[#64748B] text-sm sm:text-base cursor-not-allowed"
                     />
                   </div>
                   <div>
@@ -196,31 +330,14 @@ export default function ProfilPenyedia() {
                     <input
                       type="tel"
                       value={form.phone}
-                      onChange={(e) =>
-                        setForm({ ...form, phone: e.target.value })
-                      }
-                      className="w-full bg-[#F5EBE0] border border-[#2C1810] rounded-xl px-4 py-3.5 text-[#2C1810] text-sm sm:text-base outline-none focus:border-[#7C3AED] transition-colors"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[#2C1810] font-semibold text-sm sm:text-base mb-2">
-                      Password (Min. 8 Karakter)
-                    </label>
-                    <input
-                      type="password"
-                      value={form.password}
-                      onChange={(e) =>
-                        setForm({ ...form, password: e.target.value })
-                      }
-                      placeholder="••••••••"
-                      className="w-full bg-[#F5EBE0] border border-[#2C1810] rounded-xl px-4 py-3.5 text-[#2C1810] text-sm sm:text-base outline-none focus:border-[#7C3AED] transition-colors placeholder:text-[#94A3B8]"
+                      readOnly
+                      className="w-full bg-[#F5EBE0]/60 border border-[#2C1810]/30 rounded-xl px-4 py-3.5 text-[#64748B] text-sm sm:text-base cursor-not-allowed"
                     />
                   </div>
                 </div>
               </div>
             </section>
 
-            {/* Detail Layanan */}
             <section>
               <SectionHeader title="Detail Layanan" />
               <div className="mt-4 space-y-5">
@@ -242,7 +359,7 @@ export default function ProfilPenyedia() {
                   <label className="block text-[#2C1810] font-semibold text-sm sm:text-base mb-2">
                     Lokasi
                   </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
                     <div className="relative">
                       <select
                         value={form.province}
@@ -304,9 +421,25 @@ export default function ProfilPenyedia() {
                       <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[#7C3AED] pointer-events-none" />
                     </div>
                   </div>
+
+                  <p className="text-[#64748B] text-sm mb-2">
+                    Pin lokasimu di peta — posisi ini dipakai untuk tampil di
+                    maps saat pengguna mencari temanian.
+                  </p>
+                  <LocationPickerMap
+                    value={mapLocation}
+                    onChange={setMapLocation}
+                    markerLabel={getInitials(form.name || "?")}
+                  />
                 </div>
               </div>
             </section>
+
+            {error && (
+              <p className="text-center text-[#DC2626] text-sm font-medium">
+                {error}
+              </p>
+            )}
 
             {saved && (
               <p className="text-center text-[#16A34A] text-sm font-medium">
@@ -324,9 +457,10 @@ export default function ProfilPenyedia() {
               </button>
               <button
                 type="submit"
-                className="px-10 py-3.5 rounded-xl text-white font-semibold text-sm sm:text-base bg-gradient-to-r from-[#E91E8C] to-[#A131CC] hover:opacity-90 transition-opacity"
+                disabled={saving}
+                className="px-10 py-3.5 rounded-xl text-white font-semibold text-sm sm:text-base bg-gradient-to-r from-[#E91E8C] to-[#A131CC] hover:opacity-90 transition-opacity disabled:opacity-60"
               >
-                Simpan Perubahan
+                {saving ? "Menyimpan..." : "Simpan Perubahan"}
               </button>
             </div>
           </form>
