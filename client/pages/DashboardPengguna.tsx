@@ -1,11 +1,25 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import AppNavbar from "@/components/AppNavbar";
 import ProviderListCard from "@/components/ProviderListCard";
+import type { MapProvider } from "@/components/ProviderMap";
 import { useAuth } from "@/context/AuthContext";
 import { useOrders } from "@/context/OrderContext";
-import { getNearestProviders } from "@/data/providers";
+import { useMapLocation } from "@/hooks/useMapLocation";
+import { listBookings, mapBookingToOrder, searchProviders } from "@/lib/bookingApi";
+import { mapApiProviderToMapProvider } from "@/lib/provider-map";
 import { cn } from "@/lib/utils";
+
+function getProviderLink(provider: MapProvider): string {
+  const tags = provider.tags.map((t) => t.toLowerCase());
+  if (tags.includes("temenin")) {
+    return `/jasa-temenin/pesan/tatap-muka/${provider.id}`;
+  }
+  if (tags.includes("curhat")) {
+    return `/jasa-curhat/pesan/reguler/${provider.id}`;
+  }
+  return `/pencarian`;
+}
 
 const EMPTY_STATS = {
   balance: 0,
@@ -107,8 +121,53 @@ function StatCard({
 export default function DashboardPengguna() {
   const navigate = useNavigate();
   const { user, isAuthenticated, isLoading } = useAuth();
-  const { orders } = useOrders();
-  const nearbyProviders = useMemo(() => getNearestProviders(3), []);
+  const { orders: localOrders } = useOrders();
+  const { userLocation } = useMapLocation();
+  const [nearbyProviders, setNearbyProviders] = useState<MapProvider[]>([]);
+  const [apiOrders, setApiOrders] = useState<ReturnType<typeof mapBookingToOrder>[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await listBookings();
+        if (!cancelled) setApiOrders(data.map(mapBookingToOrder));
+      } catch {
+        if (!cancelled) setApiOrders([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!userLocation) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const raw = await searchProviders({
+          lat: userLocation.lat,
+          lng: userLocation.lng,
+          radius: 25,
+          limit: 10,
+        });
+        const mapped = raw
+          .map((p) => mapApiProviderToMapProvider(p, userLocation))
+          .filter((p): p is MapProvider => p !== null)
+          .sort((a, b) => a.distanceKm - b.distanceKm)
+          .slice(0, 3);
+        if (!cancelled) setNearbyProviders(mapped);
+      } catch {
+        if (!cancelled) setNearbyProviders([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userLocation]);
+
+  const orders = apiOrders.length > 0 ? apiOrders : localOrders;
 
   const activeOrders = useMemo(
     () =>
@@ -193,9 +252,12 @@ export default function DashboardPengguna() {
               >
                 Cari Temanian
               </Link>
-              <button className="bg-transparent border border-[#E91E8C] text-[#E91E8C] hover:bg-[#FDF4FF] px-6 py-2.5 rounded-xl font-medium text-sm transition-colors">
-                Curhat Anonim
-              </button>
+              <Link
+                to="/jasa-curhat/pilih"
+                className="bg-transparent border border-[#E91E8C] text-[#E91E8C] hover:bg-[#FDF4FF] px-6 py-2.5 rounded-xl font-medium text-sm transition-colors inline-block"
+              >
+                Curhat
+              </Link>
             </div>
           </section>
 
@@ -350,7 +412,7 @@ export default function DashboardPengguna() {
                   <ProviderListCard
                     key={provider.id}
                     provider={provider}
-                    linkTo="/pencarian"
+                    linkTo={getProviderLink(provider)}
                   />
                 ))}
               </div>

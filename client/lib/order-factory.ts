@@ -216,3 +216,65 @@ export function createAntriMewakiliOrder(input: {
     ],
   };
 }
+
+export function createBelanjaTitipOrder(input: {
+  storeName: string;
+  deliveryAddress: string;
+  items: { id: string; name: string; qty: string; estimatePrice: string }[];
+  totalPrice: number;
+  orderId: number;
+  customer: { name: string; location?: string };
+}): Order {
+  const { storeName, deliveryAddress, items, totalPrice, orderId, customer } = input;
+  const now = new Date();
+  const timeLabel = formatTime(now);
+  const itemSummary = items
+    .filter((i) => i.name.trim())
+    .slice(0, 2)
+    .map((i) => i.name.trim())
+    .join(", ");
+
+  return {
+    id: orderId,
+    companionId: 300,
+    providerName: "Helper Belanja",
+    initials: "HB",
+    userName: customer.name,
+    userInitials: getInitials(customer.name),
+    userLocation: customer.location ?? deliveryAddress,
+    service: "Jasa Bantu · Belanja/Titip Beli",
+    duration: "1 Aktivitas",
+    datetime: `Hari ini, ${timeLabel}`,
+    datetimeRange: `${storeName} → ${deliveryAddress}`,
+    status: "pending",
+    price: totalPrice,
+    tags: ["Belanja", "Titip Beli"],
+    verified: true,
+    rating: 4.8,
+    reviewCount: 42,
+    hourlyRate: "Rp 35rb/pesanan",
+    paymentMethod: "QRIS",
+    statusHistory: [
+      {
+        id: 1,
+        label: "Pesanan dibuat",
+        time: `Hari ini, ${timeLabel}`,
+        state: "done",
+      },
+      {
+        id: 2,
+        label: "Pembayaran berhasil (QRIS)",
+        time: `Hari ini, ${timeLabel}`,
+        state: "done",
+      },
+      {
+        id: 3,
+        label: `Helper sedang menuju ${storeName}`,
+        time: itemSummary
+          ? `Belanja: ${itemSummary}${items.length > 2 ? "..." : ""}`
+          : "Segera diproses",
+        state: "active",
+      },
+    ],
+  };
+}

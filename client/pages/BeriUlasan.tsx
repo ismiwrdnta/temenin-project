@@ -1,9 +1,15 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Camera } from "lucide-react";
 import AppNavbar from "@/components/AppNavbar";
 import { StarRating } from "@/components/StarRating";
-import { useOrders } from "@/context/OrderContext";
+import {
+  getBooking,
+  isUuid,
+  mapBookingToOrder,
+  submitReview,
+} from "@/lib/bookingApi";
+import type { Order } from "@/data/orders";
 import { cn } from "@/lib/utils";
 
 const ASPECTS = [
@@ -27,9 +33,10 @@ const MIN_COMMENT_LENGTH = 10;
 export default function BeriUlasan() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { getOrderById, submitReview } = useOrders();
-  const orderId = Number(id);
-  const order = Number.isFinite(orderId) ? getOrderById(orderId) : undefined;
+  const [order, setOrder] = useState<Order | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
 
   const [overallRating, setOverallRating] = useState(0);
   const [aspectRatings, setAspectRatings] = useState<Record<string, number>>(
@@ -37,6 +44,31 @@ export default function BeriUlasan() {
   );
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [comment, setComment] = useState("");
+
+  useEffect(() => {
+    if (!id || !isUuid(id)) {
+      setLoading(false);
+      return;
+    }
+    (async () => {
+      try {
+        const booking = await getBooking(id);
+        setOrder(mapBookingToOrder(booking));
+      } catch {
+        setOrder(null);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [id]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#FFF8F5] text-[#94A3B8]">
+        Memuat...
+      </div>
+    );
+  }
 
   if (!order) {
     return <Navigate to="/pesanan" replace />;
@@ -57,11 +89,26 @@ export default function BeriUlasan() {
     );
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!canSubmit || !order) return;
-    submitReview(order.id, overallRating);
-    navigate("/pesanan", { replace: true });
+    if (!canSubmit || !order || !id || !isUuid(id)) return;
+
+    setServerError(null);
+    setSubmitting(true);
+    try {
+      await submitReview({
+        booking_id: id,
+        rating: overallRating,
+        comment: comment.trim(),
+      });
+      navigate("/pesanan", { replace: true });
+    } catch (err) {
+      setServerError(
+        err instanceof Error ? err.message : "Gagal mengirim ulasan.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -250,17 +297,22 @@ export default function BeriUlasan() {
 
             {/* Actions */}
             <div className="space-y-3 pt-2 pb-8">
+              {serverError && (
+                <div className="px-4 py-3 rounded-xl bg-[#FEF2F2] border border-[#FECACA] text-[#DC2626] text-sm">
+                  {serverError}
+                </div>
+              )}
               <button
                 type="submit"
-                disabled={!canSubmit}
+                disabled={!canSubmit || submitting}
                 className={cn(
                   "w-full py-3 rounded-xl font-medium text-sm transition-colors border",
-                  canSubmit
+                  canSubmit && !submitting
                     ? "bg-white border-[#E91E8C] text-[#E91E8C] hover:bg-[#FDF4FF]"
                     : "bg-[#FAFAFA] border-[#E9D5FF] text-[#CBD5E1] cursor-not-allowed",
                 )}
               >
-                Kirim Ulasan
+                {submitting ? "Mengirim..." : "Kirim Ulasan"}
               </button>
               <Link
                 to="/pesanan"

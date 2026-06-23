@@ -5,7 +5,10 @@ import type {
   MeResponse,
   PublicUser,
   RegisterRequest,
+  SendOtpResponse,
   UserRole,
+  VerifyOtpRequest,
+  VerifyOtpResponse,
 } from "@shared/api";
 
 const TOKEN_KEY = "temenin_token";
@@ -79,6 +82,28 @@ export async function fetchCurrentUser(
   if (!res.ok) throw new Error(await parseError(res));
   const data = (await res.json()) as MeResponse;
   return data.user;
+}
+
+export async function sendOtp(token?: string): Promise<SendOtpResponse> {
+  const res = await fetch("/api/auth/send-otp", {
+    method: "POST",
+    headers: authHeaders(token),
+  });
+  if (!res.ok) throw new Error(await parseError(res));
+  return res.json() as Promise<SendOtpResponse>;
+}
+
+export async function verifyOtp(
+  data: VerifyOtpRequest,
+  token?: string,
+): Promise<VerifyOtpResponse> {
+  const res = await fetch("/api/auth/verify-otp", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error(await parseError(res));
+  return res.json() as Promise<VerifyOtpResponse>;
 }
 
 export function maskEmail(email: string): string {

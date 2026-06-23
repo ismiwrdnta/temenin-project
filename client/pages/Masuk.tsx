@@ -1,8 +1,9 @@
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { getAccountByEmail, useAuth } from "@/context/AuthContext";
+import { useAuth } from "@/context/AuthContext";
 import { GoogleAuthButton } from "@/components/GoogleAuthButton";
 import {
   Form,
@@ -23,7 +24,9 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function Masuk() {
   const navigate = useNavigate();
-  const { loginLocal, loginFromStoredAccount } = useAuth();
+  const { loginRemote } = useAuth();
+  const [serverError, setServerError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -33,23 +36,26 @@ export default function Masuk() {
     },
   });
 
-  function onSubmit(data: LoginFormValues) {
-    const existing = getAccountByEmail(data.email);
+  async function onSubmit(data: LoginFormValues) {
+    setServerError(null);
+    setIsSubmitting(true);
 
-    if (existing) {
-      loginFromStoredAccount(existing);
-      navigate(
-        existing.role === "penyedia" ? "/dashboard-penyedia" : "/dashboard",
+    try {
+      await loginRemote({ email: data.email, password: data.password });
+      // Role ditentukan dari response backend, bukan ditebak di frontend.
+      // Sebentar setelah loginRemote selesai, useAuth().user sudah terisi
+      // lewat context — tapi karena kita tidak punya akses langsung ke
+      // user yang baru di-set dalam closure ini, navigasi diarahkan ke
+      // halaman netral yang akan redirect sesuai role di dalam dirinya
+      // sendiri (lihat pola Navigate di DashboardPengguna/DashboardPenyedia).
+      navigate("/dashboard");
+    } catch (err) {
+      setServerError(
+        err instanceof Error ? err.message : "Gagal masuk. Coba lagi.",
       );
-      return;
+    } finally {
+      setIsSubmitting(false);
     }
-
-    loginLocal({
-      name: data.email.split("@")[0],
-      email: data.email,
-      role: "pengguna",
-    });
-    navigate("/dashboard");
   }
 
   return (
@@ -74,7 +80,13 @@ export default function Masuk() {
         {/* Form */}
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="w-full flex flex-col gap-5 mb-2">
-            
+
+            {serverError && (
+              <div className="w-full px-4 py-3 rounded-xl bg-[#FEF2F2] border border-[#FECACA] text-[#DC2626] text-sm">
+                {serverError}
+              </div>
+            )}
+
             {/* Email */}
             <FormField
               control={form.control}
@@ -125,10 +137,11 @@ export default function Masuk() {
             {/* Masuk Sekarang Button */}
             <button
               type="submit"
-              className="w-full py-4 rounded-xl text-white font-semibold text-lg mb-5 transition-opacity hover:opacity-90"
+              disabled={isSubmitting}
+              className="w-full py-4 rounded-xl text-white font-semibold text-lg mb-5 transition-opacity hover:opacity-90 disabled:opacity-60"
               style={{ background: 'linear-gradient(90deg, #E91E8C 0%, #A131CC 100%)' }}
             >
-              Masuk Sekarang
+              {isSubmitting ? "Memproses..." : "Masuk Sekarang"}
             </button>
           </form>
         </Form>

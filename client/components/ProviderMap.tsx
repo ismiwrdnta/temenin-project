@@ -1,22 +1,27 @@
 import { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { DEFAULT_MAP_CENTER } from "@/lib/geolocation";
 
 export type MapProvider = {
-  id: number;
+  id: string;
   name: string;
   initials: string;
   tags: string[];
+  rating: number;
+  reviews: number;
+  price: string;
   distance: string;
+  distanceKm: number;
   lat: number;
   lng: number;
 };
 
-export const USER_LOCATION = {
-  lat: -6.914744,
-  lng: 107.60981,
-  initials: "D",
-  label: "Lokasimu",
+export type UserMapLocation = {
+  lat: number;
+  lng: number;
+  initials: string;
+  label: string;
 };
 
 function createProviderIcon(initials: string, highlighted = false) {
@@ -44,7 +49,7 @@ function createProviderIcon(initials: string, highlighted = false) {
   });
 }
 
-function createUserIcon() {
+function createUserIcon(initials: string) {
   return L.divIcon({
     className: "",
     html: `<div style="
@@ -61,7 +66,7 @@ function createUserIcon() {
       font-weight: 700;
       font-size: 13px;
       color: #2C1810;
-    ">${USER_LOCATION.initials}</div>`,
+    ">${initials}</div>`,
     iconSize: [40, 40],
     iconAnchor: [20, 20],
     popupAnchor: [0, -22],
@@ -87,11 +92,13 @@ function buildProviderPopup(provider: MapProvider) {
 
 type ProviderMapProps = {
   providers: MapProvider[];
-  highlightedId?: number | null;
+  userLocation?: UserMapLocation | null;
+  highlightedId?: string | null;
 };
 
 export default function ProviderMap({
   providers,
+  userLocation = null,
   highlightedId = null,
 }: ProviderMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -101,8 +108,9 @@ export default function ProviderMap({
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
+    const center = userLocation ?? DEFAULT_MAP_CENTER;
     const map = L.map(containerRef.current, {
-      center: [USER_LOCATION.lat, USER_LOCATION.lng],
+      center: [center.lat, center.lng],
       zoom: 13,
       scrollWheelZoom: true,
     });
@@ -120,7 +128,7 @@ export default function ProviderMap({
       mapRef.current = null;
       markersLayerRef.current = null;
     };
-  }, []);
+  }, [userLocation?.lat, userLocation?.lng]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -129,17 +137,19 @@ export default function ProviderMap({
 
     layer.clearLayers();
 
-    const userMarker = L.marker([USER_LOCATION.lat, USER_LOCATION.lng], {
-      icon: createUserIcon(),
-      zIndexOffset: 1000,
-    });
-    userMarker.bindPopup(`
-      <div style="font-family:Poppins,sans-serif;font-size:14px;">
-        <p style="font-weight:700;color:#2C1810;margin:0;">${USER_LOCATION.label}</p>
-        <p style="color:#94A3B8;font-size:12px;margin:4px 0 0;">Posisi kamu saat ini</p>
-      </div>
-    `);
-    layer.addLayer(userMarker);
+    if (userLocation) {
+      const userMarker = L.marker([userLocation.lat, userLocation.lng], {
+        icon: createUserIcon(userLocation.initials),
+        zIndexOffset: 1000,
+      });
+      userMarker.bindPopup(`
+        <div style="font-family:Poppins,sans-serif;font-size:14px;">
+          <p style="font-weight:700;color:#2C1810;margin:0;">${userLocation.label}</p>
+          <p style="color:#94A3B8;font-size:12px;margin:4px 0 0;">Posisi kamu saat ini</p>
+        </div>
+      `);
+      layer.addLayer(userMarker);
+    }
 
     providers.forEach((provider) => {
       const marker = L.marker([provider.lat, provider.lng], {
@@ -153,17 +163,21 @@ export default function ProviderMap({
     });
 
     const points: L.LatLngExpression[] = providers.map((p) => [p.lat, p.lng]);
-    points.push([USER_LOCATION.lat, USER_LOCATION.lng]);
+    if (userLocation) {
+      points.push([userLocation.lat, userLocation.lng]);
+    }
 
     if (points.length > 1) {
       map.fitBounds(L.latLngBounds(points), {
         padding: [48, 48],
         maxZoom: 15,
       });
+    } else if (userLocation) {
+      map.setView([userLocation.lat, userLocation.lng], 14);
     } else {
-      map.setView([USER_LOCATION.lat, USER_LOCATION.lng], 14);
+      map.setView([DEFAULT_MAP_CENTER.lat, DEFAULT_MAP_CENTER.lng], 13);
     }
-  }, [providers, highlightedId]);
+  }, [providers, highlightedId, userLocation]);
 
   return (
     <div className="relative w-full h-full">

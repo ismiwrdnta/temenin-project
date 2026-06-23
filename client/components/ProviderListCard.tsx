@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import type { Provider } from "@/data/providers";
+import type { MapProvider } from "@/components/ProviderMap";
 import { cn } from "@/lib/utils";
 
 export default function ProviderListCard({
@@ -9,9 +9,9 @@ export default function ProviderListCard({
   linkTo,
   className,
 }: {
-  provider: Provider;
+  provider: MapProvider;
   isHighlighted?: boolean;
-  onHover?: (id: number | null) => void;
+  onHover?: (id: string | null) => void;
   linkTo?: string;
   className?: string;
 }) {
@@ -46,7 +46,9 @@ export default function ProviderListCard({
               >
                 <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" />
               </svg>
-              <span className="font-bold text-[#2C1810]">{provider.rating}</span>
+              <span className="font-bold text-[#2C1810]">
+                {provider.rating.toFixed(2)}
+              </span>
               <span className="text-[#94A3B8]">({provider.reviews})</span>
             </div>
             <span className="text-[#94A3B8]">-</span>

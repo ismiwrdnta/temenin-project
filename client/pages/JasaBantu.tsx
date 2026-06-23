@@ -152,6 +152,8 @@ export default function JasaBantu() {
                     navigate("/jasa-bantu/ambil-rapor");
                   } else if (category.id === "antri-mewakili") {
                     navigate("/jasa-bantu/antri-mewakili");
+                  } else if (category.id === "belanja-titip") {
+                    navigate("/jasa-bantu/belanja-titip");
                   }
                 }}
               />

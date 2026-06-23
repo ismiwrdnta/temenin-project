@@ -1,13 +1,18 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Star } from "lucide-react";
+import { RefreshCw, Star } from "lucide-react";
 import AppNavbar from "@/components/AppNavbar";
-import { useOrders } from "@/context/OrderContext";
 import {
   STATUS_CONFIG,
   formatRupiah,
   type Order,
 } from "@/data/orders";
+import {
+  completeBooking,
+  isUuid,
+  listBookings,
+  mapBookingToOrder,
+} from "@/lib/bookingApi";
 import { cn } from "@/lib/utils";
 
 type FilterTab = "semua" | "aktif" | "selesai" | "dibatalkan";
@@ -24,25 +29,30 @@ function OrderActions({
   onConfirmComplete,
 }: {
   order: Order;
-  onConfirmComplete: (id: number) => void;
+  onConfirmComplete: (id: string | number) => Promise<void>;
 }) {
   const navigate = useNavigate();
 
-  const handleConfirm = (e: React.MouseEvent) => {
+  const handleConfirm = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    onConfirmComplete(order.id);
+    await onConfirmComplete(order.id);
     navigate(`/pesanan/${order.id}/ulasan`);
   };
 
   if (order.status === "pending") {
     return (
-      <Link
-        to={`/pesanan/${order.id}`}
-        onClick={(e) => e.stopPropagation()}
-        className="mt-4 w-full bg-white border border-[#FACC15] text-[#CA8A04] hover:bg-[#FEFCE8] py-2.5 rounded-xl font-medium text-sm transition-colors flex items-center justify-center gap-2"
-      >
-        Lihat Status Pesanan
-      </Link>
+      <div className="mt-4 space-y-2">
+        <div className="w-full bg-[#F0FDF4] border border-[#BBF7D0] text-[#16A34A] py-2 rounded-xl font-medium text-xs text-center">
+          ✓ Pembayaran berhasil — menunggu provider accept
+        </div>
+        <Link
+          to={`/pesanan/${order.id}`}
+          onClick={(e) => e.stopPropagation()}
+          className="mt-1 w-full bg-white border border-[#FACC15] text-[#CA8A04] hover:bg-[#FEFCE8] py-2.5 rounded-xl font-medium text-sm transition-colors flex items-center justify-center gap-2"
+        >
+          Lihat Status Pesanan
+        </Link>
+      </div>
     );
   }
 
@@ -104,7 +114,7 @@ function OrderCard({
   onConfirmComplete,
 }: {
   order: Order;
-  onConfirmComplete: (id: number) => void;
+  onConfirmComplete: (id: string | number) => Promise<void>;
 }) {
   const navigate = useNavigate();
   const status = STATUS_CONFIG[order.status];
@@ -225,8 +235,47 @@ function EmptyState({
 }
 
 export default function Pesanan() {
-  const { orders, completeSession } = useOrders();
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<FilterTab>("semua");
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const fetchOrders = useCallback(async (quiet = false) => {
+    if (!quiet) setLoading(true);
+    else setIsRefreshing(true);
+    setFetchError(null);
+    try {
+      const data = await listBookings();
+      setOrders(data.map(mapBookingToOrder));
+    } catch (err) {
+      if (!quiet) {
+        setFetchError(
+          err instanceof Error ? err.message : "Gagal memuat pesanan.",
+        );
+      }
+    } finally {
+      if (!quiet) setLoading(false);
+      else setIsRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchOrders();
+    // Poll every 10 seconds to pick up provider accept/reject
+    pollingRef.current = setInterval(() => fetchOrders(true), 10_000);
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+  }, [fetchOrders]);
+
+  async function handleConfirmComplete(id: string | number) {
+    if (typeof id === "string" && isUuid(id)) {
+      await completeBooking(id);
+      await fetchOrders();
+    }
+  }
 
   const filteredOrders = useMemo(() => {
     if (activeFilter === "semua") return orders;
@@ -255,33 +304,53 @@ export default function Pesanan() {
       <main className="relative z-10 flex-1 w-full">
         <div className="w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-10 py-6 lg:py-8">
           <section className="mb-6 lg:mb-8">
-            <div className="flex flex-wrap gap-3">
-              {FILTER_TABS.map((tab) => (
-                <button
-                  key={tab.key}
-                  type="button"
-                  onClick={() => setActiveFilter(tab.key)}
-                  className={cn(
-                    "px-5 py-2 rounded-full text-sm font-medium transition-colors",
-                    activeFilter === tab.key
-                      ? "bg-[#E91E8C] text-white shadow-sm"
-                      : "bg-[#FDF4FF] text-[#94A3B8] border border-[#FBCFE8] hover:bg-[#FCE7F3] hover:text-[#7C3AED]",
-                  )}
-                >
-                  {tab.label}
-                </button>
-              ))}
+            <div className="flex flex-wrap gap-3 items-center justify-between">
+              <div className="flex flex-wrap gap-3">
+                {FILTER_TABS.map((tab) => (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    onClick={() => setActiveFilter(tab.key)}
+                    className={cn(
+                      "px-5 py-2 rounded-full text-sm font-medium transition-colors",
+                      activeFilter === tab.key
+                        ? "bg-[#E91E8C] text-white shadow-sm"
+                        : "bg-[#FDF4FF] text-[#94A3B8] border border-[#FBCFE8] hover:bg-[#FCE7F3] hover:text-[#7C3AED]",
+                    )}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => fetchOrders(true)}
+                disabled={isRefreshing}
+                className="flex items-center gap-1.5 text-xs text-[#94A3B8] hover:text-[#7C3AED] transition-colors"
+                aria-label="Refresh pesanan"
+              >
+                <RefreshCw className={cn("w-3.5 h-3.5", isRefreshing && "animate-spin")} />
+                {isRefreshing ? "Memuat..." : "Perbarui"}
+              </button>
             </div>
           </section>
 
           <section>
-            {filteredOrders.length > 0 ? (
+            {fetchError && (
+              <div className="mb-4 px-4 py-3 rounded-xl bg-[#FEF2F2] border border-[#FECACA] text-[#DC2626] text-sm">
+                {fetchError}
+              </div>
+            )}
+
+            {loading ? (
+              <div className="py-16 text-center text-[#94A3B8]">Memuat pesanan...</div>
+            ) : filteredOrders.length > 0 ? (
               <div className="flex flex-col gap-4">
                 {filteredOrders.map((order) => (
                   <OrderCard
                     key={order.id}
                     order={order}
-                    onConfirmComplete={completeSession}
+                    onConfirmComplete={handleConfirmComplete}
                   />
                 ))}
               </div>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -16,27 +16,46 @@ import { useOrders } from "@/context/OrderContext";
 import {
   STATUS_CONFIG,
   formatRupiah,
+  type ChatMessage,
   type Order,
 } from "@/data/orders";
+import {
+  completeBooking,
+  getBooking,
+  getChatHistory,
+  isUuid,
+  mapBookingToOrder,
+  sendChatMessage,
+} from "@/lib/bookingApi";
 import { cn } from "@/lib/utils";
 
 function PendingBanner({ order }: { order: Order }) {
   if (order.status !== "pending") return null;
 
   return (
-    <div className="bg-[#FEFCE8] border border-[#FACC15] rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-      <div>
-        <h2 className="text-[#CA8A04] font-bold text-base">
-          Menunggu Konfirmasi Penyedia
-        </h2>
-        <p className="text-[#64748B] text-sm mt-1">
-          Pesananmu sedang ditinjau oleh {order.providerName}. Chat akan aktif
-          setelah penyedia menerima pesanan.
+    <div className="bg-[#FEFCE8] border border-[#FACC15] rounded-2xl p-5 flex flex-col gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h2 className="text-[#CA8A04] font-bold text-base">
+            Menunggu Konfirmasi Penyedia
+          </h2>
+          <p className="text-[#64748B] text-sm mt-1">
+            Pesananmu sedang ditinjau oleh {order.providerName}. Chat akan aktif
+            setelah penyedia menerima pesanan.
+          </p>
+        </div>
+        <span className="self-start sm:self-center text-xs font-semibold px-3 py-1 rounded-full bg-[#FEF9C3] text-[#CA8A04] whitespace-nowrap">
+          Menunggu
+        </span>
+      </div>
+      <div className="flex items-center gap-2 bg-[#F0FDF4] border border-[#BBF7D0] rounded-xl px-4 py-2.5">
+        <svg className="w-4 h-4 text-[#16A34A] flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+        </svg>
+        <p className="text-[#16A34A] text-xs font-medium">
+          Pembayaran <span className="font-bold">{order.paymentMethod === "Belum dibayar" ? "belum dikonfirmasi" : "sudah dikonfirmasi"}</span> — halaman ini otomatis update
         </p>
       </div>
-      <span className="self-start sm:self-center text-xs font-semibold px-3 py-1 rounded-full bg-[#FEF9C3] text-[#CA8A04]">
-        Menunggu
-      </span>
     </div>
   );
 }
@@ -177,35 +196,113 @@ function EscrowBanner({ order }: { order: Order }) {
   );
 }
 
+const MOCK_REPLIES: Record<string, string[]> = {
+  default: [
+    "Halo! Senang bisa chat denganmu 😊",
+    "Aku siap mendengarkan, ceritakan saja apa yang ada di pikiranmu.",
+    "Aku di sini ya, nggak kemana-mana 💙",
+    "Hmm, aku mengerti perasaanmu. Lanjutkan saja ceritanya.",
+    "Terima kasih sudah mau berbagi. Itu pasti tidak mudah.",
+    "Aku dengar kamu. Kamu sudah sangat berani dengan menceritakan ini 🌟",
+    "Bagaimana perasaanmu sekarang setelah bercerita?",
+  ],
+};
+
+function getRandomReply(): string {
+  const replies = MOCK_REPLIES.default;
+  return replies[Math.floor(Math.random() * replies.length)];
+}
+
 function LiveChat({
   order,
   onSendMessage,
 }: {
   order: Order;
-  onSendMessage: (text: string) => void;
+  onSendMessage: (text: string) => Promise<void>;
 }) {
   const [message, setMessage] = useState("");
+  const [localMessages, setLocalMessages] = useState<ChatMessage[]>([]);
+  const [isSending, setIsSending] = useState(false);
+  const [isTyping, setIsTyping] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  if (order.status !== "berlangsung" || !order.chatMessages) return null;
+  const isLegacyOrder = typeof order.id === "number";
 
-  const handleSend = () => {
-    if (!message.trim()) return;
-    onSendMessage(message);
+  // Show chat for both pending AND berlangsung (curhat starts chat immediately)
+  const isCurhat = order.service.toLowerCase().includes("curhat");
+  const showChat = order.status === "berlangsung" || (isCurhat && order.status === "pending");
+
+  if (!showChat) return null;
+
+  // Merge API messages + local messages (dedup by text+time)
+  const apiMessages: ChatMessage[] = order.chatMessages ?? [];
+  const merged: ChatMessage[] = [...apiMessages];
+  localMessages.forEach((lm) => {
+    const exists = apiMessages.some(
+      (am) => am.text === lm.text && am.sender === lm.sender,
+    );
+    if (!exists) merged.push(lm);
+  });
+  merged.sort((a, b) => Number(a.id) - Number(b.id));
+
+  // Auto-scroll
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [merged.length, isTyping]);
+
+  const handleSend = async () => {
+    const text = message.trim();
+    if (!text || isSending) return;
     setMessage("");
+    setIsSending(true);
+
+    // Optimistic local message
+    const now = new Date();
+    const timeLabel = now.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+    const tempMsg: ChatMessage = { id: Date.now(), sender: "user", text, time: timeLabel };
+    setLocalMessages((prev) => [...prev, tempMsg]);
+
+    try {
+      await onSendMessage(text);
+    } catch {
+      // noop — optimistic message already shown
+    } finally {
+      setIsSending(false);
+    }
+
+    // Mock provider reply for legacy / curhat pending orders
+    if (isLegacyOrder || order.status === "pending") {
+      setIsTyping(true);
+      await new Promise((r) => setTimeout(r, 1200 + Math.random() * 1000));
+      setIsTyping(false);
+      const replyTime = new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+      setLocalMessages((prev) => [
+        ...prev,
+        { id: Date.now() + 1, sender: "provider", text: getRandomReply(), time: replyTime },
+      ]);
+    }
   };
 
   return (
-    <div className="bg-white rounded-2xl p-5 lg:p-6 shadow-sm border border-gray-100">
-      <div className="flex items-center justify-between mb-4">
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
+      {/* Chat header */}
+      <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
         <h3 className="text-[#2C1810] font-bold text-base">Live Chat</h3>
         <div className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-[#22C55E]" />
+          <span className="w-2 h-2 rounded-full bg-[#22C55E] animate-pulse" />
           <span className="text-[#16A34A] text-xs font-medium">Online</span>
         </div>
       </div>
 
-      <div className="space-y-3 max-h-[280px] overflow-y-auto mb-4 pr-1">
-        {order.chatMessages.map((msg) => (
+      {/* Messages */}
+      <div className="flex-1 space-y-3 max-h-[340px] overflow-y-auto p-5 scroll-smooth">
+        {merged.length === 0 && (
+          <div className="text-center py-8">
+            <p className="text-[#94A3B8] text-sm">Mulai percakapan dengan provider 👋</p>
+          </div>
+        )}
+        {merged.map((msg) => (
           <div
             key={msg.id}
             className={cn(
@@ -213,15 +310,20 @@ function LiveChat({
               msg.sender === "user" ? "justify-end" : "justify-start",
             )}
           >
+            {msg.sender !== "user" && (
+              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-[#E91E8C] to-[#7C3AED] flex items-center justify-center text-white text-[10px] font-bold mr-2 flex-shrink-0 self-end">
+                {order.initials.slice(0, 2)}
+              </div>
+            )}
             <div
               className={cn(
-                "max-w-[80%] rounded-2xl px-4 py-2.5 text-sm",
+                "max-w-[75%] rounded-2xl px-4 py-2.5 text-sm shadow-sm",
                 msg.sender === "user"
-                  ? "bg-[#E91E8C] text-white rounded-br-sm"
+                  ? "bg-gradient-to-br from-[#E91E8C] to-[#A131CC] text-white rounded-br-sm"
                   : "bg-[#F8F9FA] text-[#2C1810] border border-gray-100 rounded-bl-sm",
               )}
             >
-              <p>{msg.text}</p>
+              <p className="leading-relaxed">{msg.text}</p>
               <p
                 className={cn(
                   "text-[10px] mt-1",
@@ -233,26 +335,46 @@ function LiveChat({
             </div>
           </div>
         ))}
+
+        {/* Typing indicator */}
+        {isTyping && (
+          <div className="flex justify-start">
+            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-[#E91E8C] to-[#7C3AED] flex items-center justify-center text-white text-[10px] font-bold mr-2 flex-shrink-0 self-end">
+              {order.initials.slice(0, 2)}
+            </div>
+            <div className="bg-[#F8F9FA] border border-gray-100 rounded-2xl rounded-bl-sm px-4 py-3 flex items-center gap-1">
+              <span className="w-1.5 h-1.5 bg-[#94A3B8] rounded-full animate-bounce [animation-delay:0ms]" />
+              <span className="w-1.5 h-1.5 bg-[#94A3B8] rounded-full animate-bounce [animation-delay:150ms]" />
+              <span className="w-1.5 h-1.5 bg-[#94A3B8] rounded-full animate-bounce [animation-delay:300ms]" />
+            </div>
+          </div>
+        )}
+
+        <div ref={chatEndRef} />
       </div>
 
-      <div className="flex gap-2">
+      {/* Input */}
+      <div className="px-4 py-3 border-t border-gray-100 flex gap-2">
         <input
+          ref={inputRef}
           type="text"
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter") {
+            if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
-              handleSend();
+              void handleSend();
             }
           }}
           placeholder="Ketik pesan..."
-          className="flex-1 h-11 px-4 bg-[#F8F9FA] rounded-xl border border-[#F3E8FF] text-sm text-[#2C1810] placeholder:text-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-[#E91E8C]/30"
+          disabled={isSending}
+          className="flex-1 h-11 px-4 bg-[#F8F9FA] rounded-xl border border-[#F3E8FF] text-sm text-[#2C1810] placeholder:text-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-[#E91E8C]/30 disabled:opacity-60"
         />
         <button
           type="button"
-          onClick={handleSend}
-          className="w-11 h-11 rounded-full bg-[#E91E8C] hover:bg-[#D81B60] text-white flex items-center justify-center transition-colors flex-shrink-0"
+          onClick={() => void handleSend()}
+          disabled={!message.trim() || isSending}
+          className="w-11 h-11 rounded-full bg-gradient-to-br from-[#E91E8C] to-[#A131CC] hover:opacity-90 text-white flex items-center justify-center transition-all flex-shrink-0 disabled:opacity-40"
           aria-label="Kirim pesan"
         >
           <Send className="w-4 h-4" />
@@ -267,7 +389,7 @@ function DetailActions({
   onConfirmComplete,
 }: {
   order: Order;
-  onConfirmComplete: (id: number) => void;
+  onConfirmComplete: (id: string | number) => void;
 }) {
   const navigate = useNavigate();
 
@@ -380,10 +502,139 @@ function StatusTimeline({ order }: { order: Order }) {
 
 export default function DetailPesanan() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { getOrderById, completeSession, addChatMessage } = useOrders();
-  const orderId = Number(id);
-  const order = Number.isFinite(orderId) ? getOrderById(orderId) : undefined;
+  const [apiOrder, setApiOrder] = useState<Order | null>(null);
+  const [providerUserId, setProviderUserId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(Boolean(id && isUuid(id)));
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const isApiBooking = Boolean(id && isUuid(id));
+  const legacyOrderId = id && !isApiBooking ? Number(id) : NaN;
+  const legacyOrder = Number.isFinite(legacyOrderId)
+    ? getOrderById(legacyOrderId)
+    : undefined;
+  const order = isApiBooking ? apiOrder : legacyOrder;
+
+  useEffect(() => {
+    if (!id || !isUuid(id)) return;
+
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const booking = await getBooking(id);
+        if (cancelled) return;
+
+        let chatMessages: ChatMessage[] | undefined;
+        if (
+          booking.status === "confirmed" ||
+          booking.status === "in_progress" ||
+          booking.status === "completed"
+        ) {
+          try {
+            const chat = await getChatHistory(id);
+            chatMessages = chat.messages.map((m) => ({
+              id: m.id,
+              sender:
+                m.sender_id === user?.id
+                  ? ("user" as const)
+                  : ("provider" as const),
+              text: m.content ?? "",
+              time: new Date(m.created_at).toLocaleTimeString("id-ID", {
+                hour: "2-digit",
+                minute: "2-digit",
+              }),
+            }));
+          } catch {
+            chatMessages = [];
+          }
+        }
+
+        const mapped = mapBookingToOrder(booking);
+        if (chatMessages) mapped.chatMessages = chatMessages;
+        setProviderUserId(booking.provider_user_id ?? null);
+        setApiOrder(mapped);
+      } catch {
+        if (!cancelled) setApiOrder(null);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id, user?.id]);
+
+  // Auto-refresh every 10s so user sees provider accept without manual reload
+  useEffect(() => {
+    if (!id || !isUuid(id)) return;
+    pollingRef.current = setInterval(() => {
+      // Only poll if status is still pending (waiting_confirmation)
+      if (apiOrder?.status === "pending" || apiOrder?.status === "berlangsung") {
+        refreshApiOrder();
+      }
+    }, 10_000);
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, apiOrder?.status]);
+
+  async function refreshApiOrder() {
+    if (!id || !isUuid(id)) return;
+    const booking = await getBooking(id);
+    const mapped = mapBookingToOrder(booking);
+    if (mapped.status === "berlangsung") {
+      try {
+        const chat = await getChatHistory(id);
+        mapped.chatMessages = chat.messages.map((m) => ({
+          id: m.id,
+          sender:
+            m.sender_id === user?.id
+              ? ("user" as const)
+              : ("provider" as const),
+          text: m.content ?? "",
+          time: new Date(m.created_at).toLocaleTimeString("id-ID", {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+        }));
+      } catch {
+        mapped.chatMessages = [];
+      }
+    }
+    setApiOrder(mapped);
+  }
+
+  async function handleComplete(idToComplete: string | number) {
+    if (typeof idToComplete === "string" && isUuid(idToComplete)) {
+      await completeBooking(idToComplete);
+      navigate(`/pesanan/${idToComplete}/ulasan`);
+      return;
+    }
+    completeSession(Number(idToComplete));
+    navigate(`/pesanan/${idToComplete}/ulasan`);
+  }
+
+  async function handleSendMessage(text: string) {
+    if (!id || !isUuid(id)) {
+      if (legacyOrder) addChatMessage(Number(legacyOrder.id), text);
+      return;
+    }
+    await sendChatMessage(id, text);
+    await refreshApiOrder();
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#FFF8F5] text-[#94A3B8]">
+        Memuat pesanan...
+      </div>
+    );
+  }
 
   if (!order) {
     return <Navigate to="/pesanan" replace />;
@@ -391,8 +642,10 @@ export default function DetailPesanan() {
 
   const isProviderView =
     user?.role === "penyedia" &&
-    (order.companionId === user.companionId ||
-      normalizeName(order.providerName) === normalizeName(user.name));
+    (isApiBooking
+      ? providerUserId === user.id
+      : order.companionId === user.companionId ||
+        normalizeName(order.providerName) === normalizeName(user.name));
 
   if (user?.role === "penyedia" && !isProviderView) {
     return <Navigate to="/dashboard-penyedia" replace />;
@@ -490,12 +743,12 @@ export default function DetailPesanan() {
             <EscrowBanner order={order} />
             <LiveChat
               order={order}
-              onSendMessage={(text) => addChatMessage(order.id, text)}
+              onSendMessage={handleSendMessage}
             />
             {!isProviderView && (
               <DetailActions
                 order={order}
-                onConfirmComplete={completeSession}
+                onConfirmComplete={handleComplete}
               />
             )}
             <StatusTimeline order={order} />
