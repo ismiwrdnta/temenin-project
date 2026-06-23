@@ -73,6 +73,19 @@ async function seed() {
   try {
     const pwHash = await hashPassword("password123");
 
+    const adminEmail = "admin@temenin.id";
+    const existingAdmin = await findUserByEmail(adminEmail);
+    if (!existingAdmin) {
+      console.log(`Membuat user admin: Admin 1 (${adminEmail})`);
+      await createUser({
+        email: adminEmail,
+        fullName: "Admin 1",
+        role: "admin",
+        passwordHash: pwHash,
+        emailVerified: true,
+      });
+    }
+
     for (const p of PROVIDERS_TO_SEED) {
       let user = await findUserByEmail(p.email);
       if (!user) {

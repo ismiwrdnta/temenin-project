@@ -14,6 +14,7 @@ import {
   type StoredAccount,
 } from "@/lib/local-accounts";
 import { resolveCompanionId } from "@/lib/provider-link";
+import { resolveRoleForEmail } from "@/lib/admin-auth";
 
 export type { UserRole };
 
@@ -65,7 +66,7 @@ type AuthContextValue = {
   loginLocal: (profile: LoginLocalInput) => void;
   loginFromStoredAccount: (account: StoredAccount) => void;
   // Jalur baru — terhubung ke backend asli
-  loginRemote: (input: LoginRemoteInput) => Promise<void>;
+  loginRemote: (input: LoginRemoteInput) => Promise<AuthUser>;
   registerRemote: (input: RegisterRemoteInput) => Promise<void>;
   logout: () => void;
 };
@@ -96,7 +97,7 @@ function buildAuthUser(profile: LoginLocalInput): AuthUser {
     id: `local-${profile.email.toLowerCase()}`,
     name: profile.name.trim(),
     initials: getInitials(profile.name),
-    role: profile.role,
+    role: resolveRoleForEmail(profile.email, profile.role),
     email: profile.email.trim().toLowerCase(),
     phone: profile.phone,
     picture: profile.picture,
@@ -108,16 +109,17 @@ function buildAuthUser(profile: LoginLocalInput): AuthUser {
 // di seluruh frontend — supaya halaman lain tidak perlu tahu bedanya
 // user dari loginLocal vs loginRemote.
 function mapRemoteUserToAuthUser(remote: PublicUser): AuthUser {
+  const role = resolveRoleForEmail(remote.email, remote.role);
   return {
     id: remote.id,
     name: remote.name,
     initials: getInitials(remote.name),
-    role: remote.role,
+    role,
     email: remote.email,
     phone: remote.phone,
     picture: remote.picture,
     companionId:
-      remote.role === "penyedia"
+      role === "penyedia"
         ? resolveCompanionId(remote.name)
         : undefined,
   };
@@ -131,6 +133,7 @@ function loadCachedUser(): AuthUser | null {
     if (user.role === "penyedia" && !user.companionId) {
       user.companionId = resolveCompanionId(user.name);
     }
+    user.role = resolveRoleForEmail(user.email, user.role);
     return user;
   } catch {
     return null;
@@ -200,7 +203,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         const { token, user: remoteUser } = data as RemoteAuthResponse;
         sessionStorage.setItem(TOKEN_KEY, token);
-        persistUser(mapRemoteUserToAuthUser(remoteUser));
+        const authUser = mapRemoteUserToAuthUser(remoteUser);
+        persistUser(authUser);
+        return authUser;
       } finally {
         setIsLoading(false);
       }

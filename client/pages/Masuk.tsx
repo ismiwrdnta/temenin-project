@@ -4,6 +4,7 @@ import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useAuth } from "@/context/AuthContext";
+import { getDashboardPathForRole } from "@/lib/admin-auth";
 import { GoogleAuthButton } from "@/components/GoogleAuthButton";
 import {
   Form,
@@ -41,14 +42,11 @@ export default function Masuk() {
     setIsSubmitting(true);
 
     try {
-      await loginRemote({ email: data.email, password: data.password });
-      // Role ditentukan dari response backend, bukan ditebak di frontend.
-      // Sebentar setelah loginRemote selesai, useAuth().user sudah terisi
-      // lewat context — tapi karena kita tidak punya akses langsung ke
-      // user yang baru di-set dalam closure ini, navigasi diarahkan ke
-      // halaman netral yang akan redirect sesuai role di dalam dirinya
-      // sendiri (lihat pola Navigate di DashboardPengguna/DashboardPenyedia).
-      navigate("/dashboard");
+      const authUser = await loginRemote({
+        email: data.email,
+        password: data.password,
+      });
+      navigate(getDashboardPathForRole(authUser.role));
     } catch (err) {
       setServerError(
         err instanceof Error ? err.message : "Gagal masuk. Coba lagi.",
