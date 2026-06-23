@@ -176,3 +176,107 @@ DROP TRIGGER IF EXISTS trg_create_provider_wallet ON provider_profiles;
 CREATE TRIGGER trg_create_provider_wallet
   AFTER INSERT ON provider_profiles
   FOR EACH ROW EXECUTE FUNCTION create_provider_wallet();
+
+-- ============================================================
+-- Migration: 003_add_reviews_and_chat.sql
+-- HANYA MENAMBAH — gabungkan ke akhir schema.sql, sama seperti
+-- migration 002 sebelumnya
+-- ============================================================
+ 
+-- ── Reviews ──────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS reviews (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  booking_id UUID NOT NULL UNIQUE REFERENCES bookings(id),
+  reviewer_id UUID NOT NULL REFERENCES users(id),
+  reviewee_id UUID NOT NULL REFERENCES users(id),
+  rating INT NOT NULL CHECK (rating BETWEEN 1 AND 5),
+  comment TEXT NOT NULL CHECK (LENGTH(comment) >= 10),
+  provider_reply TEXT,
+  replied_at TIMESTAMPTZ,
+  is_deleted BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+ 
+CREATE INDEX IF NOT EXISTS idx_reviews_reviewee ON reviews(reviewee_id);
+CREATE INDEX IF NOT EXISTS idx_reviews_booking ON reviews(booking_id);
+ 
+-- ── Chat sessions & messages ─────────────────────────────────
+CREATE TABLE IF NOT EXISTS chat_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  booking_id UUID NOT NULL UNIQUE REFERENCES bookings(id),
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+ 
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id UUID NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+  sender_id UUID NOT NULL REFERENCES users(id),
+  message_type VARCHAR(20) NOT NULL DEFAULT 'text'
+    CHECK (message_type IN ('text', 'location', 'image')),
+  content TEXT,
+  location_lat NUMERIC(10,7),
+  location_lng NUMERIC(10,7),
+  is_read BOOLEAN NOT NULL DEFAULT false,
+  read_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+ 
+CREATE INDEX IF NOT EXISTS idx_chat_msg_session ON chat_messages(session_id);
+ 
+-- ── Trigger: auto-create chat_session saat booking dikonfirmasi
+CREATE OR REPLACE FUNCTION create_chat_session_on_confirm()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.status = 'confirmed' AND OLD.status = 'waiting_confirmation' THEN
+    INSERT INTO chat_sessions (booking_id, expires_at)
+    VALUES (
+      NEW.id,
+      (NEW.session_date + NEW.session_start + (NEW.duration_hours || ' hours')::INTERVAL + INTERVAL '30 days')
+    )
+    ON CONFLICT (booking_id) DO NOTHING;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+ 
+DROP TRIGGER IF EXISTS trg_create_chat_session ON bookings;
+CREATE TRIGGER trg_create_chat_session
+  AFTER UPDATE ON bookings
+  FOR EACH ROW EXECUTE FUNCTION create_chat_session_on_confirm();
+ 
+-- ── Trigger: auto-update avg_rating provider saat ada review baru
+CREATE OR REPLACE FUNCTION update_provider_rating()
+RETURNS TRIGGER AS $$
+BEGIN
+  UPDATE provider_profiles
+  SET
+    avg_rating = (SELECT AVG(rating) FROM reviews WHERE reviewee_id = NEW.reviewee_id AND is_deleted = false),
+    total_reviews = (SELECT COUNT(*) FROM reviews WHERE reviewee_id = NEW.reviewee_id AND is_deleted = false),
+    updated_at = NOW()
+  WHERE user_id = NEW.reviewee_id;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+ 
+DROP TRIGGER IF EXISTS trg_update_provider_rating ON reviews;
+CREATE TRIGGER trg_update_provider_rating
+  AFTER INSERT OR UPDATE ON reviews
+  FOR EACH ROW EXECUTE FUNCTION update_provider_rating();
+
+-- ============================================================
+-- Migration: 004_add_email_otp_codes.sql
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS email_otp_codes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  code VARCHAR(6) NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_email_otp_user ON email_otp_codes(user_id);
+CREATE INDEX IF NOT EXISTS idx_email_otp_expires ON email_otp_codes(expires_at);
+ 

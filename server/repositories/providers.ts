@@ -26,7 +26,13 @@ export async function findProviderByUserId(
 ): Promise<ProviderProfileRow | null> {
   const pool = getPool();
   const result = await pool.query<ProviderProfileRow>(
-    `SELECT * FROM provider_profiles WHERE user_id = $1`,
+    `SELECT pp.*, u.full_name, u.picture_url,
+            ARRAY_AGG(DISTINCT pc.category) FILTER (WHERE pc.category IS NOT NULL) AS categories
+     FROM provider_profiles pp
+     JOIN users u ON u.id = pp.user_id
+     LEFT JOIN provider_categories pc ON pc.provider_id = pp.id
+     WHERE pp.user_id = $1
+     GROUP BY pp.id, u.id`,
     [userId],
   );
   return result.rows[0] ?? null;

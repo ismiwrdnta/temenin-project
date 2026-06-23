@@ -11,7 +11,9 @@
     "test": "vitest --run",
     "format.fix": "prettier --write .",
     "typecheck": "tsc",
-    "db:migrate": "tsx server/db/migrate.ts"
+    "db:migrate": "tsx server/db/migrate.ts",
+    "db:seed": "tsx server/db/seed.ts",
+    "db:seed": "tsx server/db/seed.ts"
   },
   "dependencies": {
     "@react-oauth/google": "^0.13.5",
@@ -23,6 +25,7 @@
     "leaflet": "^1.9.4",
     "midtrans-client": "^1.4.3",
     "pg": "^8.21.0",
+    "socket.io": "^4.8.3",
     "zod": "^3.25.76"
   },
   "devDependencies": {

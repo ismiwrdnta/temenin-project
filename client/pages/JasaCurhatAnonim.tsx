@@ -1,25 +1,28 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowLeft, User } from "lucide-react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import AppNavbar from "@/components/AppNavbar";
 import { CurhatAnonimAvatar } from "@/components/CurhatAnonimAvatar";
 import { useAuth } from "@/context/AuthContext";
-import {
-  ANONIM_LISTENERS,
-  type CurhatListener,
-} from "@/data/curhat-listeners";
+import { searchProviders, type ProviderSearchResult } from "@/lib/bookingApi";
+import { anonListenerAlias } from "@/lib/provider-map";
 import { cn } from "@/lib/utils";
 
 function ListenerCard({
-  listener,
+  provider,
+  alias,
   selected,
   onSelect,
 }: {
-  listener: CurhatListener;
+  provider: ProviderSearchResult;
+  alias: string;
   selected: boolean;
   onSelect: () => void;
 }) {
-  const online = listener.status === "online";
+  const hourlyRate = parseFloat(provider.hourly_rate);
+  const priceLabel = Number.isFinite(hourlyRate)
+    ? `${Math.round(hourlyRate / 1000)}rb/jam`
+    : "-";
 
   return (
     <button
@@ -33,21 +36,12 @@ function ListenerCard({
       )}
     >
       <div className="flex gap-4">
-        <CurhatAnonimAvatar online={online} />
+        <CurhatAnonimAvatar online={provider.is_available} />
 
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-3 mb-2">
-            <h3 className="text-[#2C1810] font-bold text-lg">
-              {listener.alias}
-            </h3>
-            <div className="text-right flex-shrink-0">
-              <p className="text-[#2C1810] font-bold text-base">
-                {listener.price}
-              </p>
-              {listener.isNearest && (
-                <p className="text-[#94A3B8] text-xs">{listener.priceLabel}</p>
-              )}
-            </div>
+            <h3 className="text-[#2C1810] font-bold text-lg">{alias}</h3>
+            <p className="text-[#2C1810] font-bold text-base">{priceLabel}</p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 mb-3">
@@ -57,7 +51,7 @@ function ListenerCard({
             <span className="px-2.5 py-0.5 rounded-full bg-[#EDE9FE] text-[#7C3AED] text-xs font-semibold">
               Anonim
             </span>
-            {online && (
+            {provider.is_available && (
               <span className="flex items-center gap-1 text-[#16A34A] text-xs font-semibold">
                 <span className="w-2 h-2 rounded-full bg-[#22C55E]" />
                 Online
@@ -66,18 +60,15 @@ function ListenerCard({
           </div>
 
           <p className="text-[#64748B] text-sm leading-relaxed mb-3">
-            {listener.description}
+            {provider.bio ??
+              "Pendengar terverifikasi siap mendengarkan curhatmu secara anonim."}
           </p>
 
           <p className="text-[#64748B] text-sm">
             <span className="font-semibold text-[#2C1810]">
-              {listener.rating.toFixed(2)}
+              {Number(provider.avg_rating).toFixed(2)}
             </span>{" "}
-            ({listener.reviews} Ulasan)
-            <span className="text-[#CBD5E1] mx-1.5">•</span>
-            {listener.gender}
-            <span className="text-[#CBD5E1] mx-1.5">•</span>
-            {listener.ageRange}
+            ({provider.total_reviews} Ulasan)
           </p>
         </div>
       </div>
@@ -88,7 +79,35 @@ function ListenerCard({
 export default function JasaCurhatAnonim() {
   const navigate = useNavigate();
   const { user, isAuthenticated, isLoading } = useAuth();
-  const [selectedId, setSelectedId] = useState(ANONIM_LISTENERS[0]?.id ?? "");
+  const [providers, setProviders] = useState<ProviderSearchResult[]>([]);
+  const [selectedId, setSelectedId] = useState("");
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const data = await searchProviders({ category: "curhat", limit: 50 });
+        if (!cancelled) {
+          setProviders(data);
+          if (data[0]) setSelectedId(data[0].id);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setFetchError(
+            err instanceof Error ? err.message : "Gagal memuat pendengar.",
+          );
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   if (isLoading) {
     return (
@@ -106,7 +125,7 @@ export default function JasaCurhatAnonim() {
     return <Navigate to="/dashboard-penyedia" replace />;
   }
 
-  const selectedListener = ANONIM_LISTENERS.find((l) => l.id === selectedId);
+  const selectedProvider = providers.find((p) => p.id === selectedId);
 
   return (
     <div className="min-h-screen w-full bg-[#FFFCF9] font-['Poppins',sans-serif] flex flex-col">
@@ -127,7 +146,7 @@ export default function JasaCurhatAnonim() {
                 Curhat Anonim
               </h1>
               <p className="text-[#94A3B8] text-sm sm:text-base">
-                Identitasmu tersembunyi • Rp 40-70rb/jam
+                Identitasmu tersembunyi · dari database provider terverifikasi
               </p>
             </div>
           </div>
@@ -137,38 +156,48 @@ export default function JasaCurhatAnonim() {
               <User className="w-5 h-5 text-[#7C3AED]" strokeWidth={1.5} />
             </div>
             <p className="text-[#4C1D95] text-sm sm:text-base leading-relaxed">
-              <span className="font-bold">Mode Anonim:</span> Nama, foto, dan
-              identitasmu{" "}
-              <span className="font-bold">tidak pernah dikirim</span> ke
-              provider. Percakapan otomatis terhapus dalam 7 hari.
+              <span className="font-bold">Mode Anonim:</span> Nama asli
+              pendengar disamarkan. Identitasmu tidak dikirim ke provider.
             </p>
           </div>
 
-          <p className="text-[#2C1810] font-semibold text-sm sm:text-base mb-5">
-            Pendengar yang tersedia — identitas mereka juga ditampilkan
-            terbatas untukmu
-          </p>
+          {fetchError && (
+            <div className="mb-4 px-4 py-3 rounded-xl bg-[#FEF2F2] border border-[#FECACA] text-[#DC2626] text-sm">
+              {fetchError}
+            </div>
+          )}
 
           <div className="flex flex-col gap-4 mb-8">
-            {ANONIM_LISTENERS.map((listener) => (
-              <ListenerCard
-                key={listener.id}
-                listener={listener}
-                selected={selectedId === listener.id}
-                onSelect={() => setSelectedId(listener.id)}
-              />
-            ))}
+            {!loading && providers.length > 0 ? (
+              providers.map((provider) => (
+                <ListenerCard
+                  key={provider.id}
+                  provider={provider}
+                  alias={anonListenerAlias(provider.id)}
+                  selected={selectedId === provider.id}
+                  onSelect={() => setSelectedId(provider.id)}
+                />
+              ))
+            ) : !loading ? (
+              <div className="py-16 text-center rounded-2xl border border-dashed border-[#E9D5FF] bg-white text-sm text-[#64748B]">
+                Belum ada pendengar curhat tersedia.
+              </div>
+            ) : (
+              <div className="py-16 text-center text-[#94A3B8] text-sm">
+                Memuat pendengar...
+              </div>
+            )}
           </div>
 
-          {selectedListener && (
+          {selectedProvider && (
             <button
               type="button"
               onClick={() =>
-                navigate(`/jasa-curhat/anonim/${selectedListener.id}`)
+                navigate(`/jasa-curhat/pesan/anonim/${selectedProvider.id}`)
               }
               className="w-full py-4 rounded-xl border-2 border-[#2C1810] bg-white text-[#2C1810] font-semibold text-base hover:bg-[#F5EBE0] transition-colors"
             >
-              Pilih {selectedListener.alias} →
+              Pilih {anonListenerAlias(selectedProvider.id)} →
             </button>
           )}
         </div>

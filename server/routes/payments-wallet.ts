@@ -3,6 +3,8 @@ import { z } from "zod";
 import { isDatabaseConfigured } from "../db/pool";
 import {
   findWalletByUserId,
+  findWalletTransactions,
+  findWithdrawalRequests,
   debitWallet,
   createWithdrawalRequest,
 } from "../repositories/payments";
@@ -30,6 +32,37 @@ export const handleGetMyWallet: RequestHandler = async (req, res) => {
   } catch (error) {
     console.error("Get wallet error:", error);
     res.status(500).json({ error: "Gagal mengambil data wallet." });
+  }
+};
+
+export const handleGetWalletTransactions: RequestHandler = async (req, res) => {
+  if (!isDatabaseConfigured()) {
+    res.status(503).json({ error: "Database belum dikonfigurasi." });
+    return;
+  }
+
+  const userId = req.userId;
+  if (!userId) {
+    res.status(401).json({ error: "Tidak terautentikasi." });
+    return;
+  }
+
+  try {
+    const wallet = await findWalletByUserId(userId);
+    if (!wallet) {
+      res.status(404).json({ error: "Wallet tidak ditemukan." });
+      return;
+    }
+
+    const [transactions, withdrawals] = await Promise.all([
+      findWalletTransactions(wallet.id),
+      findWithdrawalRequests(wallet.id),
+    ]);
+
+    res.json({ data: { wallet, transactions, withdrawals } });
+  } catch (error) {
+    console.error("Get wallet transactions error:", error);
+    res.status(500).json({ error: "Gagal mengambil riwayat transaksi." });
   }
 };
 
@@ -89,3 +122,4 @@ export const handleRequestWithdrawal: RequestHandler = async (req, res) => {
     res.status(500).json({ error: "Gagal memproses penarikan dana." });
   }
 };
+

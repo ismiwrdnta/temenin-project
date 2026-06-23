@@ -67,10 +67,10 @@ export async function updatePaymentStatus(
   const pool = getPool();
   const result = await pool.query<PaymentRow>(
     `UPDATE payments SET
-       status = $1,
+       status = $1::varchar,
        midtrans_transaction_id = COALESCE($2, midtrans_transaction_id),
        payment_method = COALESCE($3, payment_method),
-       paid_at = CASE WHEN $1 = 'paid' THEN NOW() ELSE paid_at END
+       paid_at = CASE WHEN $1::varchar = 'paid' THEN NOW() ELSE paid_at END
      WHERE id = $4
      RETURNING *`,
     [status, meta.transactionId ?? null, meta.paymentMethod ?? null, id],
@@ -209,3 +209,57 @@ export async function createWithdrawalRequest(input: {
   );
   return result.rows[0];
 }
+
+export interface WalletTransactionRow {
+  id: string;
+  wallet_id: string;
+  booking_id: string | null;
+  type: "credit" | "debit";
+  amount: string;
+  commission_amount: string | null;
+  net_amount: string;
+  description: string | null;
+  created_at: string;
+}
+
+export async function findWalletTransactions(
+  walletId: string,
+  limit = 50,
+): Promise<WalletTransactionRow[]> {
+  const pool = getPool();
+  const result = await pool.query<WalletTransactionRow>(
+    `SELECT * FROM wallet_transactions
+     WHERE wallet_id = $1
+     ORDER BY created_at DESC
+     LIMIT $2`,
+    [walletId, limit],
+  );
+  return result.rows;
+}
+
+export interface WithdrawalRequestRow {
+  id: string;
+  wallet_id: string;
+  amount: string;
+  bank_name: string;
+  account_number: string;
+  account_name: string;
+  status: string;
+  created_at: string;
+}
+
+export async function findWithdrawalRequests(
+  walletId: string,
+  limit = 20,
+): Promise<WithdrawalRequestRow[]> {
+  const pool = getPool();
+  const result = await pool.query<WithdrawalRequestRow>(
+    `SELECT * FROM withdrawal_requests
+     WHERE wallet_id = $1
+     ORDER BY created_at DESC
+     LIMIT $2`,
+    [walletId, limit],
+  );
+  return result.rows;
+}
+

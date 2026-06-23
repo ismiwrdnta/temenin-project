@@ -61,6 +61,17 @@ export const TEMENIN_COMPANIONS: Companion[] = [
     status: "pending",
     modes: ["online"],
   },
+  {
+    id: 4,
+    name: "Ima",
+    initials: "IM",
+    tags: ["Nonton", "Makan Bareng"],
+    rating: 4.75,
+    reviews: 45,
+    age: 21,
+    status: "verified-online",
+    modes: ["tatap-muka", "online"],
+  },
 ];
 
 export function getModeLabel(mode: TemeninMode) {

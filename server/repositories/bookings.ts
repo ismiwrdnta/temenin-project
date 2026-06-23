@@ -156,3 +156,41 @@ export async function updateBookingStatus(
   );
   return result.rows[0] ?? null;
 }
+
+export interface BookingDetailRow extends BookingRow {
+  provider_name: string;
+  provider_picture: string | null;
+  provider_user_id: string;
+  avg_rating: number;
+  total_reviews: number;
+  user_name: string;
+  user_phone: string | null;
+  payment_status: string | null;
+  has_review: boolean;
+}
+
+export async function findBookingDetailById(
+  id: string,
+): Promise<BookingDetailRow | null> {
+  const pool = getPool();
+  const result = await pool.query<BookingDetailRow>(
+    `SELECT b.*,
+            pu.full_name AS provider_name,
+            pu.picture_url AS provider_picture,
+            pu.id AS provider_user_id,
+            pp.avg_rating,
+            pp.total_reviews,
+            uu.full_name AS user_name,
+            uu.phone AS user_phone,
+            pay.status AS payment_status,
+            EXISTS(SELECT 1 FROM reviews r WHERE r.booking_id = b.id AND r.is_deleted = false) AS has_review
+     FROM bookings b
+     JOIN provider_profiles pp ON pp.id = b.provider_id
+     JOIN users pu ON pu.id = pp.user_id
+     JOIN users uu ON uu.id = b.user_id
+     LEFT JOIN payments pay ON pay.booking_id = b.id
+     WHERE b.id = $1`,
+    [id],
+  );
+  return result.rows[0] ?? null;
+}

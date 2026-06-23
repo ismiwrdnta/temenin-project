@@ -1,7 +1,9 @@
 import type { RequestHandler } from "express";
 import { z } from "zod";
 import { isDatabaseConfigured } from "../db/pool";
-import { findBookingsByUser } from "../repositories/bookings";
+import { findUserById } from "../repositories/users";
+import { findProviderByUserId } from "../repositories/providers";
+import { findBookingsByUser, findBookingsByProvider } from "../repositories/bookings";
 
 const querySchema = z.object({
   status: z
@@ -37,11 +39,32 @@ export const handleListBookings: RequestHandler = async (req, res) => {
   }
 
   try {
-    const bookings = await findBookingsByUser(userId, {
-      status: parsed.data.status,
-      limit: parsed.data.limit,
-      offset: parsed.data.offset,
-    });
+    const user = await findUserById(userId);
+    if (!user) {
+      res.status(401).json({ error: "Tidak terautentikasi." });
+      return;
+    }
+
+    let bookings;
+    if (user.role === "penyedia") {
+      const provider = await findProviderByUserId(userId);
+      if (!provider) {
+        res.json({ data: [] });
+        return;
+      }
+      bookings = await findBookingsByProvider(provider.id, {
+        status: parsed.data.status,
+        limit: parsed.data.limit,
+        offset: parsed.data.offset,
+      });
+    } else {
+      bookings = await findBookingsByUser(userId, {
+        status: parsed.data.status,
+        limit: parsed.data.limit,
+        offset: parsed.data.offset,
+      });
+    }
+
     res.json({ data: bookings });
   } catch (error) {
     console.error("List bookings error:", error);

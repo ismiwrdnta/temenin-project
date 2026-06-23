@@ -1,10 +1,15 @@
-import { useMemo } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
-import { MessageCircle, Phone, Star } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link, Navigate, useNavigate } from "react-router-dom";
+import { MessageCircle, Phone, Wallet } from "lucide-react";
 import ProviderNavbar from "@/components/ProviderNavbar";
 import { useAuth } from "@/context/AuthContext";
-import { useOrders } from "@/context/OrderContext";
-import { formatRupiah, getOrdersForProvider, type Order } from "@/data/orders";
+import { formatRupiah, type Order } from "@/data/orders";
+import {
+  confirmBooking,
+  listBookings,
+  mapBookingToOrder,
+} from "@/lib/bookingApi";
+import { getStoredToken } from "@/lib/authApi";
 import { cn } from "@/lib/utils";
 
 function StatusBadge({ status }: { status: Order["status"] }) {
@@ -43,26 +48,30 @@ function TransactionActions({
   onAccept,
   onReject,
   onChat,
+  busy,
 }: {
   order: Order;
-  onAccept: (id: number) => void;
-  onReject: (id: number) => void;
-  onChat: (id: number) => void;
+  onAccept: (id: string | number) => void;
+  onReject: (id: string | number) => void;
+  onChat: (id: string | number) => void;
+  busy: boolean;
 }) {
   if (order.status === "pending") {
     return (
       <div className="flex items-center gap-2">
         <button
           type="button"
+          disabled={busy}
           onClick={() => onAccept(order.id)}
-          className="px-4 py-1.5 rounded-lg bg-[#22C55E] hover:bg-[#16A34A] text-white text-xs font-semibold transition-colors"
+          className="px-4 py-1.5 rounded-lg bg-[#22C55E] hover:bg-[#16A34A] text-white text-xs font-semibold transition-colors disabled:opacity-60"
         >
           Terima
         </button>
         <button
           type="button"
+          disabled={busy}
           onClick={() => onReject(order.id)}
-          className="px-4 py-1.5 rounded-lg bg-[#EF4444] hover:bg-[#DC2626] text-white text-xs font-semibold transition-colors"
+          className="px-4 py-1.5 rounded-lg bg-[#EF4444] hover:bg-[#DC2626] text-white text-xs font-semibold transition-colors disabled:opacity-60"
         >
           Tolak
         </button>
@@ -94,19 +103,7 @@ function TransactionActions({
   }
 
   if (order.status === "selesai") {
-    return (
-      <div className="flex items-center gap-3">
-        {order.reviewRating != null && (
-          <div className="flex items-center gap-1 text-[#2C1810]">
-            <Star className="w-4 h-4 fill-[#FACC15] text-[#FACC15]" />
-            <span className="text-xs font-bold">
-              {order.reviewRating.toFixed(1)} Feedback
-            </span>
-          </div>
-        )}
-        <StatusBadge status={order.status} />
-      </div>
-    );
+    return <StatusBadge status={order.status} />;
   }
 
   return <StatusBadge status={order.status} />;
@@ -117,11 +114,13 @@ function TransactionRow({
   onAccept,
   onReject,
   onChat,
+  busy,
 }: {
   order: Order;
-  onAccept: (id: number) => void;
-  onReject: (id: number) => void;
-  onChat: (id: number) => void;
+  onAccept: (id: string | number) => void;
+  onReject: (id: string | number) => void;
+  onChat: (id: string | number) => void;
+  busy: boolean;
 }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[minmax(180px,1.4fr)_minmax(120px,1fr)_minmax(140px,1fr)_minmax(90px,0.7fr)_minmax(160px,1.2fr)] gap-4 lg:gap-3 items-center py-5 border-b border-[#FBCFE8]/40 last:border-b-0">
@@ -165,6 +164,7 @@ function TransactionRow({
           onAccept={onAccept}
           onReject={onReject}
           onChat={onChat}
+          busy={busy}
         />
       </div>
     </div>
@@ -181,29 +181,91 @@ const STATUS_SORT: Record<Order["status"], number> = {
 export default function DashboardPenyedia() {
   const navigate = useNavigate();
   const { user, isAuthenticated, isLoading } = useAuth();
-  const { orders, acceptOrder, rejectOrder } = useOrders();
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loadingOrders, setLoadingOrders] = useState(true);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const providerOrders = useMemo(() => {
-    if (!user) return [];
-    return getOrdersForProvider(orders, {
-      name: user.name,
-      companionId: user.companionId,
-    }).sort(
-      (a, b) => STATUS_SORT[a.status] - STATUS_SORT[b.status],
-    );
-  }, [orders, user]);
+  const loadOrders = useCallback(async () => {
+    setLoadingOrders(true);
+    try {
+      const data = await listBookings();
+      setOrders(data.map(mapBookingToOrder));
+    } finally {
+      setLoadingOrders(false);
+    }
+  }, []);
+
+  async function loadWallet() {
+    try {
+      const token = getStoredToken();
+      const res = await fetch("/api/payments/wallet/me", {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setWalletBalance(parseFloat(data.data.balance));
+      }
+    } catch {
+      // silent — wallet tidak wajib tampil
+    }
+  }
+
+  useEffect(() => {
+    if (isAuthenticated && user?.role === "penyedia") {
+      loadOrders();
+      loadWallet();
+      // Auto-refresh setiap 15 detik
+      pollingRef.current = setInterval(() => {
+        loadOrders();
+      }, 15_000);
+    }
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+  }, [isAuthenticated, user?.role, loadOrders]);
+
+  const providerOrders = useMemo(
+    () => [...orders].sort((a, b) => STATUS_SORT[a.status] - STATUS_SORT[b.status]),
+    [orders],
+  );
+
+  const pendingCount = useMemo(
+    () => orders.filter((o) => o.status === "pending").length,
+    [orders],
+  );
 
   const stats = useMemo(() => {
     const upcoming = providerOrders.filter(
       (o) => o.status === "pending" || o.status === "berlangsung",
     ).length;
     const completed = providerOrders.filter((o) => o.status === "selesai").length;
-    const totalIncome = providerOrders
-      .filter((o) => o.status === "selesai")
-      .reduce((sum, o) => sum + o.price, 0);
 
-    return { upcoming, completed, totalIncome };
+    return { upcoming, completed };
   }, [providerOrders]);
+
+  async function handleAccept(id: string | number) {
+    if (typeof id !== "string") return;
+    setBusyId(id);
+    try {
+      await confirmBooking(id, { action: "accept" });
+      await loadOrders();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleReject(id: string | number) {
+    if (typeof id !== "string") return;
+    setBusyId(id);
+    try {
+      await confirmBooking(id, { action: "reject", reason: "Ditolak oleh provider" });
+      await loadOrders();
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   if (isLoading) {
     return (
@@ -231,16 +293,22 @@ export default function DashboardPenyedia() {
 
       <main className="relative z-10 flex-1 w-full">
         <div className="w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-10 py-6 lg:py-10">
-          <ProviderNavbar />
+          <ProviderNavbar activePage="dashboard" pendingCount={pendingCount} />
 
-          <section className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6 lg:mt-8">
+          {/* ── Stats ─────────────────────────────────────── */}
+          <section className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6 lg:mt-8">
             <div className="bg-white rounded-2xl p-6 border border-[#FBCFE8] shadow-sm text-center">
               <p className="text-[#2C1810] font-bold text-sm sm:text-base mb-2">
-                Transaksi Akan Datang
+                Pesanan Aktif
               </p>
               <p className="text-4xl sm:text-5xl font-bold text-[#2C1810]">
                 {stats.upcoming}
               </p>
+              {pendingCount > 0 && (
+                <p className="text-[#E91E8C] text-xs font-semibold mt-1">
+                  {pendingCount} menunggu konfirmasi
+                </p>
+              )}
             </div>
             <div className="bg-white rounded-2xl p-6 border border-[#FBCFE8] shadow-sm text-center">
               <p className="text-[#2C1810] font-bold text-sm sm:text-base mb-2">
@@ -250,34 +318,55 @@ export default function DashboardPenyedia() {
                 {stats.completed}
               </p>
             </div>
-          </section>
-
-          <section className="mt-4">
-            <div className="w-full py-4 px-6 rounded-2xl text-white font-bold text-sm sm:text-base text-center bg-gradient-to-r from-[#E91E8C] to-[#A131CC] shadow-sm">
-              Total Pemasukan: {formatRupiah(stats.totalIncome)}
-            </div>
-          </section>
-
-          <section className="mt-6 bg-[#FFF8F5] rounded-2xl border border-[#FBCFE8] shadow-sm overflow-hidden">
-            <div className="hidden lg:grid grid-cols-[minmax(180px,1.4fr)_minmax(120px,1fr)_minmax(140px,1fr)_minmax(90px,0.7fr)_minmax(160px,1.2fr)] gap-3 px-6 py-4 border-b border-[#FBCFE8]/60 bg-white/60">
-              <p className="text-[#2C1810] font-bold text-sm">Nama User</p>
-              <p className="text-[#2C1810] font-bold text-sm">Jasa</p>
-              <p className="text-[#2C1810] font-bold text-sm">Jadwal</p>
-              <p className="text-[#2C1810] font-bold text-sm">Harga</p>
-              <p className="text-[#2C1810] font-bold text-sm text-right">
-                Aksi
+            <Link
+              to="/wallet-penyedia"
+              className="bg-gradient-to-br from-[#E91E8C] to-[#7C3AED] rounded-2xl p-6 shadow-sm text-center text-white hover:opacity-90 transition-opacity"
+            >
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <Wallet className="w-4 h-4 opacity-80" />
+                <p className="font-bold text-sm">Saldo Wallet</p>
+              </div>
+              <p className="text-3xl sm:text-4xl font-bold">
+                {walletBalance !== null ? formatRupiah(walletBalance) : "—"}
               </p>
+              <p className="text-white/70 text-xs mt-1">Klik untuk detail →</p>
+            </Link>
+          </section>
+
+          {/* ── Tabel Pesanan ─────────────────────────────── */}
+          <section className="mt-6 bg-[#FFF8F5] rounded-2xl border border-[#FBCFE8] shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-[#FBCFE8]/60 bg-white/60 flex items-center justify-between">
+              <p className="text-[#2C1810] font-bold text-sm">
+                Pesanan Masuk
+                {pendingCount > 0 && (
+                  <span className="ml-2 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 bg-[#EF4444] text-white text-[10px] font-bold rounded-full">
+                    {pendingCount}
+                  </span>
+                )}
+              </p>
+            </div>
+            <div className="hidden lg:grid grid-cols-[minmax(180px,1.4fr)_minmax(120px,1fr)_minmax(140px,1fr)_minmax(90px,0.7fr)_minmax(160px,1.2fr)] gap-3 px-6 py-3 border-b border-[#FBCFE8]/40 bg-white/40">
+              <p className="text-[#94A3B8] font-semibold text-xs">Nama User</p>
+              <p className="text-[#94A3B8] font-semibold text-xs">Jasa</p>
+              <p className="text-[#94A3B8] font-semibold text-xs">Jadwal</p>
+              <p className="text-[#94A3B8] font-semibold text-xs">Harga</p>
+              <p className="text-[#94A3B8] font-semibold text-xs text-right">Aksi</p>
             </div>
 
             <div className="px-4 sm:px-6">
-              {providerOrders.length > 0 ? (
+              {loadingOrders ? (
+                <div className="py-16 text-center text-[#94A3B8] text-sm">
+                  Memuat transaksi...
+                </div>
+              ) : providerOrders.length > 0 ? (
                 providerOrders.map((order) => (
                   <TransactionRow
                     key={order.id}
                     order={order}
-                    onAccept={acceptOrder}
-                    onReject={rejectOrder}
+                    onAccept={handleAccept}
+                    onReject={handleReject}
                     onChat={(id) => navigate(`/pesanan/${id}`)}
+                    busy={busyId === order.id}
                   />
                 ))
               ) : (
@@ -287,11 +376,7 @@ export default function DashboardPenyedia() {
                   </p>
                   <p className="text-[#94A3B8] text-xs mt-1 max-w-sm mx-auto">
                     Pesanan dari pengguna akan muncul di sini setelah mereka
-                    memesan Temanian dengan nama yang sama seperti akunmu
-                    {user.companionId
-                      ? ` (ID: ${user.companionId})`
-                      : " (daftar ulang sebagai Rafi Ananda / Bimo Pratama)"}
-                    .
+                    memesan jasa Temenin.
                   </p>
                 </div>
               )}

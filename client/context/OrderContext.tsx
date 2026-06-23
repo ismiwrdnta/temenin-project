@@ -16,6 +16,7 @@ import type { ChatMessage, Order } from "@/data/orders";
 import {
   createAmbilRaporOrder as buildAmbilRaporOrder,
   createAntriMewakiliOrder as buildAntriMewakiliOrder,
+  createBelanjaTitipOrder as buildBelanjaTitipOrder,
   createOrderFromBooking,
 } from "@/lib/order-factory";
 import { resolveCompanionId } from "@/lib/provider-link";
@@ -52,12 +53,21 @@ type CreateAntriMewakiliOrderInput = {
   };
 };
 
+type CreateBelanjaTitipOrderInput = {
+  storeName: string;
+  deliveryAddress: string;
+  items: { id: string; name: string; qty: string; estimatePrice: string }[];
+  totalPrice: number;
+  customer: { name: string; location?: string };
+};
+
 type OrderContextValue = {
   orders: Order[];
   getOrderById: (id: number) => Order | undefined;
   createOrder: (input: CreateOrderInput) => Order;
   createAmbilRaporOrder: (input: CreateAmbilRaporOrderInput) => Order;
   createAntriMewakiliOrder: (input: CreateAntriMewakiliOrderInput) => Order;
+  createBelanjaTitipOrder: (input: CreateBelanjaTitipOrderInput) => Order;
   acceptOrder: (id: number) => void;
   rejectOrder: (id: number) => void;
   addChatMessage: (orderId: number, text: string) => void;
@@ -151,6 +161,18 @@ export function OrderProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(ORDERS_KEY, JSON.stringify(orders));
   }, [orders]);
 
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === ORDERS_KEY) {
+        setOrders(loadOrders());
+      }
+    };
+    window.addEventListener("storage", handleStorageChange);
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+    };
+  }, []);
+
   const getOrderById = useCallback(
     (id: number) => orders.find((order) => order.id === id),
     [orders],
@@ -177,6 +199,16 @@ export function OrderProvider({ children }: { children: ReactNode }) {
     (input: CreateAntriMewakiliOrderInput) => {
       const orderId = Date.now();
       const order = buildAntriMewakiliOrder({ ...input, orderId });
+      setOrders((prev) => [order, ...prev]);
+      return order;
+    },
+    [],
+  );
+
+  const createBelanjaTitipOrder = useCallback(
+    (input: CreateBelanjaTitipOrderInput) => {
+      const orderId = Date.now();
+      const order = buildBelanjaTitipOrder({ ...input, orderId });
       setOrders((prev) => [order, ...prev]);
       return order;
     },
@@ -322,6 +354,7 @@ export function OrderProvider({ children }: { children: ReactNode }) {
       createOrder,
       createAmbilRaporOrder,
       createAntriMewakiliOrder,
+      createBelanjaTitipOrder,
       acceptOrder,
       rejectOrder,
       addChatMessage,
@@ -334,6 +367,7 @@ export function OrderProvider({ children }: { children: ReactNode }) {
       createOrder,
       createAmbilRaporOrder,
       createAntriMewakiliOrder,
+      createBelanjaTitipOrder,
       acceptOrder,
       rejectOrder,
       addChatMessage,
