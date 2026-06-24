@@ -280,7 +280,12 @@ export default function DashboardPenyedia() {
   }
 
   if (user.role !== "penyedia") {
-    return <Navigate to="/dashboard" replace />;
+    return (
+      <Navigate
+        to={user.role === "admin" ? "/dashboard-admin" : "/dashboard"}
+        replace
+      />
+    );
   }
 
   return (

@@ -33,6 +33,7 @@ import Pesanan from "./pages/Pesanan";
 import DetailPesanan from "./pages/DetailPesanan";
 import BeriUlasan from "./pages/BeriUlasan";
 import DashboardPenyedia from "./pages/DashboardPenyedia";
+import DashboardAdmin from "./pages/DashboardAdmin";
 import ProfilPenyedia from "./pages/ProfilPenyedia";
 import WalletPenyedia from "./pages/WalletPenyedia";
 import { AuthProvider } from "@/context/AuthContext";
@@ -59,6 +60,7 @@ const App = () => (
           <Route path="/daftar-provider" element={<DaftarProvider />} />
           <Route path="/dashboard" element={<DashboardPengguna />} />
           <Route path="/dashboard-penyedia" element={<DashboardPenyedia />} />
+          <Route path="/dashboard-admin" element={<DashboardAdmin />} />
           <Route path="/profil-penyedia" element={<ProfilPenyedia />} />
           <Route path="/wallet-penyedia" element={<WalletPenyedia />} />
           <Route path="/pencarian" element={<Pencarian />} />

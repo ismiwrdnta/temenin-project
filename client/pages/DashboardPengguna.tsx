@@ -198,6 +198,10 @@ export default function DashboardPengguna() {
     return <Navigate to="/dashboard-penyedia" replace />;
   }
 
+  if (user.role === "admin") {
+    return <Navigate to="/dashboard-admin" replace />;
+  }
+
   const userData = {
     name: user.name,
     initials: user.initials,
