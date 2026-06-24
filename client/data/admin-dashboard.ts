@@ -116,11 +116,56 @@ export const JASA_TRAFFIC_DETAIL = [
 ];
 
 export const ADMIN_REPORTS = [
-  { reporter: "Pelapor 1", report: "Detail disini", status: "Rejected" as const },
-  { reporter: "Pelapor 2", report: "Detail disini", status: "Approved" as const },
-  { reporter: "Pelapor 3", report: "Detail disini", status: "Pending" as const },
-  { reporter: "Pelapor 4", report: "Detail disini", status: "Approved" as const },
-  { reporter: "Pelapor 5", report: "Detail disini", status: "Approved" as const },
+  {
+    reporter: "Pelapor 1",
+    report: "Detail disini",
+    status: "Rejected" as const,
+    reporterStatus: "Provider",
+    dateTime: "Jumat, 05 April 2026 - 14.30",
+    service: "Jasa Temenin",
+    detail:
+      "Transaksi sudah selesai dilakukan, tapi komisi saya belum masuk setelah 3 hari diselesaikan",
+  },
+  {
+    reporter: "Pelapor 2",
+    report: "Detail disini",
+    status: "Approved" as const,
+    reporterStatus: "Provider",
+    dateTime: "Jumat, 05 April 2026 - 14.30",
+    service: "Jasa Temenin",
+    detail:
+      "Transaksi sudah selesai dilakukan, tapi komisi saya belum masuk setelah 3 hari diselesaikan",
+  },
+  {
+    reporter: "Pelapor 3",
+    report: "Detail disini",
+    status: "Pending" as const,
+    reporterStatus: "Provider",
+    dateTime: "Jumat, 05 April 2026 - 14.30",
+    service: "Jasa Temenin",
+    detail:
+      "Transaksi sudah selesai dilakukan, tapi komisi saya belum masuk setelah 3 hari diselesaikan",
+  },
+  {
+    reporter: "Pelapor 4",
+    report: "Detail disini",
+    status: "Approved" as const,
+    reporterStatus: "Provider",
+    dateTime: "Jumat, 05 April 2026 - 14.30",
+    service: "Jasa Temenin",
+    detail:
+      "Transaksi sudah selesai dilakukan, tapi komisi saya belum masuk setelah 3 hari diselesaikan",
+  },
+  {
+    reporter: "Pelapor 5",
+    report: "Detail disini",
+    status: "Approved" as const,
+    reporterStatus: "Provider",
+    dateTime: "Jumat, 05 April 2026 - 14.30",
+    service: "Jasa Temenin",
+    detail:
+      "Transaksi sudah selesai dilakukan, tapi komisi saya belum masuk setelah 3 hari diselesaikan",
+  },
 ];
 
 export const ADMIN_TRANSACTIONS = [

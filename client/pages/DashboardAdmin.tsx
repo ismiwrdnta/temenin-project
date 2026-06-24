@@ -18,6 +18,7 @@ import {
   Search,
   TrendingDown,
   TrendingUp,
+  X,
 } from "lucide-react";
 import AdminNavbar, { type AdminNavKey } from "@/components/AdminNavbar";
 import { useAuth } from "@/context/AuthContext";
@@ -39,6 +40,21 @@ import { cn } from "@/lib/utils";
 
 const TRAFFIC_TABS = ["Users", "Providers", "Transaction"] as const;
 const JASA_CATEGORY_TABS = ["Temenin", "Curhat", "Bantu Aktivitas"] as const;
+const FAQ_ITEMS = [
+  {
+    question: "Bagaimana cara...",
+    answer: "Kamu bisa buka menu...",
+  },
+  {
+    question: "Apa yang dilakukan jika...",
+    answer: "Silahkan kontak ke nomor berikut...",
+  },
+  {
+    question: "xxx saya tidak berfungsi...",
+    answer: "Silahkan kontak ke nomor berikut...",
+  },
+] as const;
+type AdminReport = (typeof ADMIN_REPORTS)[number];
 const ADMIN_VIEWS = [
   "dashboard",
   "user-traffic",
@@ -104,12 +120,21 @@ function SearchField() {
   );
 }
 
-function ReportTable() {
+function ReportTable({
+  onSelectReport,
+}: {
+  onSelectReport: (report: AdminReport) => void;
+}) {
   return (
     <div className="rounded-xl border border-[#7C3AED] bg-[#FFFCF9] p-3">
       <div className="space-y-2 md:hidden">
         {ADMIN_REPORTS.map((row) => (
-          <div key={row.reporter} className="rounded-lg bg-white p-3 text-sm">
+          <button
+            key={row.reporter}
+            type="button"
+            onClick={() => onSelectReport(row)}
+            className="w-full rounded-lg bg-white p-3 text-left text-sm transition-colors hover:bg-[#F8F5FF]"
+          >
             <div className="mb-2 flex items-center justify-between gap-3">
               <p className="font-medium text-[#111111]">{row.reporter}</p>
               <span
@@ -122,7 +147,7 @@ function ReportTable() {
               </span>
             </div>
             <p className="text-[#111111]">{row.report}</p>
-          </div>
+          </button>
         ))}
       </div>
 
@@ -147,11 +172,22 @@ function ReportTable() {
           </thead>
           <tbody>
             {ADMIN_REPORTS.map((row) => (
-              <tr key={row.reporter} className="bg-white">
+              <tr
+                key={row.reporter}
+                tabIndex={0}
+                onClick={() => onSelectReport(row)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    onSelectReport(row);
+                  }
+                }}
+                className="cursor-pointer bg-white transition-colors hover:bg-[#F8F5FF] focus:bg-[#F8F5FF] focus:outline-none"
+              >
                 <td className="px-4 py-1.5 text-center text-[#111111]">
                   {row.reporter}
                 </td>
-                <td className="px-4 py-1.5 text-center text-[#111111]">
+                <td className="px-4 py-1.5 text-center text-[#111111] underline-offset-2 hover:underline">
                   {row.report}
                 </td>
                 <td className="px-4 py-1.5 text-center">
@@ -168,6 +204,263 @@ function ReportTable() {
             ))}
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+function ReportDetailModal({
+  report,
+  onClose,
+}: {
+  report: AdminReport | null;
+  onClose: () => void;
+}) {
+  if (!report) return null;
+
+  const detailRows = [
+    ["Pelapor", report.reporter],
+    ["Status", report.reporterStatus],
+    ["Tanggal dan Jam", report.dateTime],
+    ["Jasa yang diberikan", report.service],
+    ["Detail Laporan", report.detail],
+  ] as const;
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 px-4 py-6 backdrop-blur-[1px]"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="report-detail-title"
+    >
+      <div className="relative w-full max-w-[750px] rounded-[26px] border border-[#EC2D8F] bg-white px-6 py-7 text-[#6D28D9] shadow-2xl sm:px-12">
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute right-5 top-4 text-[#EC2D8F] transition-colors hover:text-[#BE185D]"
+          aria-label="Tutup detail laporan"
+        >
+          <X className="h-7 w-7" />
+        </button>
+
+        <h2
+          id="report-detail-title"
+          className="mb-7 text-center text-lg font-bold text-[#EC2D8F]"
+        >
+          Detail Laporan
+        </h2>
+
+        <div className="mx-auto max-w-[560px] space-y-2 text-base sm:text-lg">
+          {detailRows.map(([label, value]) => (
+            <div
+              key={label}
+              className="grid grid-cols-1 gap-1 sm:grid-cols-[180px_12px_1fr] sm:gap-0"
+            >
+              <p>{label}</p>
+              <p className="hidden sm:block">:</p>
+              <p className="font-normal sm:hidden">: {value}</p>
+              <p className="hidden leading-relaxed sm:block">{value}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-8 flex justify-center">
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-9 w-full max-w-[285px] rounded-lg border border-[#EC2D8F] bg-[#F8F1E8] text-base font-bold text-[#EC2D8F] transition-colors hover:bg-[#FDE7F3]"
+          >
+            Proses
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BroadcastModal({
+  isOpen,
+  showSuccess,
+  onClose,
+  onSubmit,
+  onDismissSuccess,
+}: {
+  isOpen: boolean;
+  showSuccess: boolean;
+  onClose: () => void;
+  onSubmit: () => void;
+  onDismissSuccess: () => void;
+}) {
+  if (!isOpen) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 px-4 py-6 backdrop-blur-[1px]"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="broadcast-title"
+    >
+      <div className="relative w-full max-w-[610px] rounded-[24px] border border-[#EC2D8F] bg-white px-6 py-8 shadow-2xl sm:px-11">
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute right-4 top-4 text-[#EC2D8F] transition-colors hover:text-[#BE185D] sm:right-5"
+          aria-label="Tutup broadcast"
+        >
+          <X className="h-7 w-7" />
+        </button>
+
+        <h2
+          id="broadcast-title"
+          className="mb-2 text-center text-lg font-bold text-[#EC2D8F]"
+        >
+          Broadcast
+        </h2>
+
+        <div className="mx-auto mb-10 flex h-20 w-full max-w-[305px] flex-col items-center justify-center rounded-[26px] border border-[#EC2D8F] text-[#111111]">
+          <p className="text-sm font-bold leading-none">Aktif:</p>
+          <p className="text-5xl leading-none">5</p>
+        </div>
+
+        {showSuccess && (
+          <div className="relative mx-auto mb-3 flex min-h-[66px] w-full max-w-[560px] items-center justify-center rounded-lg border border-[#EC2D8F] bg-white px-10 text-center text-[#EC2D8F] shadow-sm">
+            <p className="text-base sm:text-lg">Broadcast berhasil di dibuat</p>
+            <button
+              type="button"
+              onClick={onDismissSuccess}
+              className="absolute right-3 top-2 text-[#EC2D8F] transition-colors hover:text-[#BE185D]"
+              aria-label="Tutup pesan sukses broadcast"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        )}
+
+        <div className="mx-auto max-w-[510px]">
+          <label
+            htmlFor="broadcast-message"
+            className="mb-3 block text-base text-[#111111] sm:text-lg"
+          >
+            Buat Broadcast
+          </label>
+          <textarea
+            id="broadcast-message"
+            placeholder="Type here"
+            className="h-32 w-full resize-none rounded-lg bg-[#F8F1ED] px-4 py-4 text-sm text-[#2C1810] outline-none placeholder:text-xs placeholder:font-bold placeholder:text-[#8AA0BF] focus:ring-1 focus:ring-[#EC2D8F]"
+          />
+        </div>
+
+        <div className="mt-5 flex justify-center">
+          <button
+            type="button"
+            onClick={onSubmit}
+            className="h-10 w-full max-w-[235px] rounded-lg border border-[#EC2D8F] bg-[#F8F1E8] text-base font-bold text-[#EC2D8F] transition-colors hover:bg-[#FDE7F3]"
+          >
+            Buat
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FaqModal({
+  isOpen,
+  showSuccess,
+  onClose,
+  onSubmit,
+  onDismissSuccess,
+}: {
+  isOpen: boolean;
+  showSuccess: boolean;
+  onClose: () => void;
+  onSubmit: () => void;
+  onDismissSuccess: () => void;
+}) {
+  if (!isOpen) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 px-4 py-6 backdrop-blur-[1px]"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="faq-title"
+    >
+      <div className="relative w-full max-w-[720px] rounded-[24px] border border-[#EC2D8F] bg-white px-5 py-8 shadow-2xl sm:px-10">
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute right-4 top-4 text-[#EC2D8F] transition-colors hover:text-[#BE185D] sm:right-5"
+          aria-label="Tutup FAQ"
+        >
+          <X className="h-7 w-7" />
+        </button>
+
+        <h2
+          id="faq-title"
+          className="mb-5 text-center text-2xl font-bold text-[#EC2D8F]"
+        >
+          FAQ
+        </h2>
+
+        <div className="space-y-1.5 text-sm text-[#111111] sm:text-base">
+          {FAQ_ITEMS.map((item) => (
+            <div key={item.question} className="grid grid-cols-[120px_12px_1fr] gap-2 sm:grid-cols-[140px_14px_1fr]">
+              <p className="font-semibold">Pertanyaan</p>
+              <p>:</p>
+              <p>{item.question}</p>
+              <p className="font-semibold">Jawaban</p>
+              <p>:</p>
+              <p>{item.answer}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-10">
+          <h3 className="mb-4 text-lg font-semibold text-[#111111]">Tambah FAQ</h3>
+          <div className="space-y-4">
+            <label className="grid grid-cols-1 gap-2 text-sm font-semibold text-[#111111] sm:grid-cols-[120px_1fr] sm:items-center">
+              <span>Pertanyaan</span>
+              <input
+                type="text"
+                placeholder="Type here"
+                className="h-11 w-full rounded-lg bg-[#F8F1ED] px-4 text-sm font-normal text-[#2C1810] outline-none placeholder:font-semibold placeholder:text-[#8AA0BF] focus:ring-1 focus:ring-[#EC2D8F]"
+              />
+            </label>
+            <label className="grid grid-cols-1 gap-2 text-sm font-semibold text-[#111111] sm:grid-cols-[120px_1fr] sm:items-center">
+              <span>Jawaban</span>
+              <input
+                type="text"
+                placeholder="Type here"
+                className="h-11 w-full rounded-lg bg-[#F8F1ED] px-4 text-sm font-normal text-[#2C1810] outline-none placeholder:font-semibold placeholder:text-[#8AA0BF] focus:ring-1 focus:ring-[#EC2D8F]"
+              />
+            </label>
+          </div>
+
+          <div className="mt-8 flex justify-center">
+            <button
+              type="button"
+              onClick={onSubmit}
+              className="h-12 w-full max-w-[305px] rounded-lg border border-[#EC2D8F] bg-[#F8F1E8] text-lg font-bold text-[#EC2D8F] transition-colors hover:bg-[#FDE7F3]"
+            >
+              Tambah
+            </button>
+          </div>
+        </div>
+
+        {showSuccess && (
+          <div className="absolute left-1/2 top-1/2 z-10 w-[min(90%,560px)] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-[#EC2D8F] bg-white px-6 py-4 text-center text-[#EC2D8F] shadow-xl">
+            <button
+              type="button"
+              onClick={onDismissSuccess}
+              className="absolute right-3 top-2 text-[#EC2D8F] transition-colors hover:text-[#BE185D]"
+              aria-label="Tutup pesan sukses FAQ"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <p className="text-base sm:text-lg">FAQ sudah ditambahkan</p>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -425,7 +718,11 @@ function LocationTrafficView() {
   );
 }
 
-function JasaTrafficView() {
+function JasaTrafficView({
+  onSelectReport,
+}: {
+  onSelectReport: (report: AdminReport) => void;
+}) {
   const [jasaCategory, setJasaCategory] =
     useState<(typeof JASA_CATEGORY_TABS)[number]>("Bantu Aktivitas");
 
@@ -510,13 +807,21 @@ function JasaTrafficView() {
         </h1>
 
         <SearchField />
-        <ReportTable />
+        <ReportTable onSelectReport={onSelectReport} />
       </section>
     </div>
   );
 }
 
-function ProfileView() {
+function ProfileView({
+  onSelectReport,
+  onOpenBroadcast,
+  onOpenFaq,
+}: {
+  onSelectReport: (report: AdminReport) => void;
+  onOpenBroadcast: () => void;
+  onOpenFaq: () => void;
+}) {
   return (
     <div className="space-y-7 sm:space-y-9">
       <section className="grid grid-cols-1 items-center gap-5 md:grid-cols-[140px_1fr] md:gap-6">
@@ -542,6 +847,7 @@ function ProfileView() {
         <div className="flex flex-wrap items-start justify-center gap-8 sm:gap-12">
           <button
             type="button"
+            onClick={onOpenBroadcast}
             className="flex flex-col items-center gap-1 text-[#111111]"
           >
             <PackageOpen className="h-11 w-11 stroke-[2.4]" />
@@ -549,6 +855,7 @@ function ProfileView() {
           </button>
           <button
             type="button"
+            onClick={onOpenFaq}
             className="flex flex-col items-center gap-1 text-[#111111]"
           >
             <MessageCircleQuestion className="h-11 w-11 stroke-[2.4]" />
@@ -563,7 +870,7 @@ function ProfileView() {
         </h2>
 
         <SearchField />
-        <ReportTable />
+        <ReportTable onSelectReport={onSelectReport} />
       </section>
     </div>
   );
@@ -574,6 +881,13 @@ export default function DashboardAdmin() {
   const [searchParams] = useSearchParams();
   const [trafficTab, setTrafficTab] =
     useState<(typeof TRAFFIC_TABS)[number]>("Users");
+  const [selectedReport, setSelectedReport] = useState<AdminReport | null>(
+    null,
+  );
+  const [isBroadcastOpen, setIsBroadcastOpen] = useState(false);
+  const [showBroadcastSuccess, setShowBroadcastSuccess] = useState(false);
+  const [isFaqOpen, setIsFaqOpen] = useState(false);
+  const [showFaqSuccess, setShowFaqSuccess] = useState(false);
   const activePage = getAdminView(searchParams.get("view"));
 
   if (isLoading) {
@@ -611,9 +925,19 @@ export default function DashboardAdmin() {
           ) : activePage === "location-traffic" ? (
             <LocationTrafficView />
           ) : activePage === "jasa-traffic" ? (
-            <JasaTrafficView />
+            <JasaTrafficView onSelectReport={setSelectedReport} />
           ) : activePage === "profil" ? (
-            <ProfileView />
+            <ProfileView
+              onSelectReport={setSelectedReport}
+              onOpenBroadcast={() => {
+                setShowBroadcastSuccess(false);
+                setIsBroadcastOpen(true);
+              }}
+              onOpenFaq={() => {
+                setShowFaqSuccess(false);
+                setIsFaqOpen(true);
+              }}
+            />
           ) : (
             <>
           <p className="mb-4 text-xs font-medium text-[#94A3B8]">
@@ -802,6 +1126,31 @@ export default function DashboardAdmin() {
           )}
         </div>
       </main>
+
+      <ReportDetailModal
+        report={selectedReport}
+        onClose={() => setSelectedReport(null)}
+      />
+      <BroadcastModal
+        isOpen={isBroadcastOpen}
+        showSuccess={showBroadcastSuccess}
+        onClose={() => {
+          setIsBroadcastOpen(false);
+          setShowBroadcastSuccess(false);
+        }}
+        onSubmit={() => setShowBroadcastSuccess(true)}
+        onDismissSuccess={() => setShowBroadcastSuccess(false)}
+      />
+      <FaqModal
+        isOpen={isFaqOpen}
+        showSuccess={showFaqSuccess}
+        onClose={() => {
+          setIsFaqOpen(false);
+          setShowFaqSuccess(false);
+        }}
+        onSubmit={() => setShowFaqSuccess(true)}
+        onDismissSuccess={() => setShowFaqSuccess(false)}
+      />
     </div>
   );
 }
