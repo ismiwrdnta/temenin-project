@@ -16,8 +16,11 @@ import LocationPickerMap, {
   type PickedLocation,
 } from "@/components/LocationPickerMap";
 import { useAuth } from "@/context/AuthContext";
+import { useLocationAddress } from "@/hooks/useLocationAddress";
 import { formatRupiah } from "@/data/orders";
+import { getBrowserLocation } from "@/lib/geolocation";
 import { cn } from "@/lib/utils";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 const BASE_PRICE = 35_000;
 
@@ -78,6 +81,7 @@ function FormInput({
 }
 
 export default function JasaBantuBelanjaTitip() {
+  usePageTitle("Belanja Titip | TEMENIN");
   const navigate = useNavigate();
   const { user, isAuthenticated, isLoading } = useAuth();
 
@@ -90,6 +94,8 @@ export default function JasaBantuBelanjaTitip() {
   const [notes, setNotes] = useState("");
   const [pickedLocation, setPickedLocation] = useState<PickedLocation | null>(null);
   const [formError, setFormError] = useState("");
+
+  useLocationAddress(pickedLocation, setDeliveryAddress);
 
   const totalEstimate = items.reduce((sum, item) => {
     return sum + (parseFloat(item.estimatePrice.replace(/\D/g, "")) || 0);
@@ -128,19 +134,14 @@ export default function JasaBantuBelanjaTitip() {
     );
   };
 
-  const handleUseMyLocation = () => {
-    if (!("geolocation" in navigator)) return;
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setPickedLocation({
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-        });
-        setFormError("");
-      },
-      () => {},
-      { enableHighAccuracy: true, timeout: 8000 },
-    );
+  const handleUseMyLocation = async () => {
+    try {
+      const pos = await getBrowserLocation();
+      setPickedLocation(pos);
+      setFormError("");
+    } catch {
+      setFormError("Gagal mengambil lokasi. Izinkan akses GPS atau pilih di peta.");
+    }
   };
 
   const handleSubmit = () => {

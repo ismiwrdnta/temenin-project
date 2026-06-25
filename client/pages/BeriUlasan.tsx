@@ -11,6 +11,7 @@ import {
 } from "@/lib/bookingApi";
 import type { Order } from "@/data/orders";
 import { cn } from "@/lib/utils";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 const ASPECTS = [
   { key: "punctuality", label: "Ketepatan Waktu" },
@@ -28,9 +29,10 @@ const SESSION_TAGS = [
   { id: "aman", label: "Terverifikasi & aman", emoji: "🛡️" },
 ];
 
-const MIN_COMMENT_LENGTH = 10;
+const MIN_COMMENT_LENGTH = 0; // komentar opsional
 
 export default function BeriUlasan() {
+  usePageTitle("Beri Ulasan | TEMENIN");
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [order, setOrder] = useState<Order | null>(null);
@@ -78,8 +80,7 @@ export default function BeriUlasan() {
     return <Navigate to={`/pesanan/${order.id}`} replace />;
   }
 
-  const canSubmit =
-    overallRating > 0 && comment.trim().length >= MIN_COMMENT_LENGTH;
+  const canSubmit = overallRating > 0;
 
   const toggleTag = (tagId: string) => {
     setSelectedTags((prev) =>
@@ -99,7 +100,7 @@ export default function BeriUlasan() {
       await submitReview({
         booking_id: id,
         rating: overallRating,
-        comment: comment.trim(),
+        comment: comment.trim() || "-",
       });
       navigate("/pesanan", { replace: true });
     } catch (err) {
@@ -259,21 +260,18 @@ export default function BeriUlasan() {
             <div className="bg-white rounded-2xl p-5 lg:p-6 shadow-sm border border-gray-100">
               <h3 className="text-[#2C1810] font-bold text-base mb-3">
                 Komentar{" "}
-                <span className="text-[#E91E8C] font-normal text-sm">
-                  *wajib (min. 10 karakter)
+                <span className="text-[#94A3B8] font-normal text-sm">
+                  (opsional)
                 </span>
               </h3>
               <textarea
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
-                placeholder={`Ceritakan pengalamanmu bersama ${order.providerName}... (min. 10 karakter)`}
+                placeholder={`Ceritakan pengalamanmu bersama ${order.providerName}...`}
                 rows={5}
                 className="w-full px-4 py-3 bg-[#F8F9FA] rounded-xl border border-[#F3E8FF] text-sm text-[#2C1810] placeholder:text-[#94A3B8] resize-none focus:outline-none focus:ring-2 focus:ring-[#E91E8C]/30"
               />
-              <div className="flex items-center justify-between mt-2 text-xs text-[#94A3B8]">
-                <span>
-                  {comment.trim().length} / min. {MIN_COMMENT_LENGTH} karakter
-                </span>
+              <div className="flex items-center justify-end mt-2 text-xs text-[#94A3B8]">
                 <span>Ulasanmu bersifat publik</span>
               </div>
             </div>

@@ -10,6 +10,7 @@ import {
   type ProviderSearchResult,
 } from "@/lib/bookingApi";
 import { cn } from "@/lib/utils";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 function ProviderCard({
   provider,
@@ -73,6 +74,7 @@ function ProviderCard({
 }
 
 export default function JasaCurhatReguler() {
+  usePageTitle("Curhat Reguler | TEMENIN");
   const navigate = useNavigate();
   const { user, isAuthenticated, isLoading } = useAuth();
   const [providers, setProviders] = useState<ProviderSearchResult[]>([]);

@@ -14,6 +14,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 // Skema validasi untuk Login
 const loginSchema = z.object({
@@ -24,6 +25,7 @@ const loginSchema = z.object({
 type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function Masuk() {
+  usePageTitle("Masuk | TEMENIN");
   const navigate = useNavigate();
   const { loginRemote } = useAuth();
   const [serverError, setServerError] = useState<string | null>(null);

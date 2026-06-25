@@ -4,6 +4,7 @@ import { Link, Navigate, useNavigate } from "react-router-dom";
 import AppNavbar from "@/components/AppNavbar";
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 export type CurhatMode = "reguler" | "anonim";
 
@@ -93,6 +94,7 @@ function AnonimIcon() {
 }
 
 export default function JasaCurhatPilih() {
+  usePageTitle("Jasa Curhat | TEMENIN");
   const navigate = useNavigate();
   const { user, isAuthenticated, isLoading } = useAuth();
   const [selected, setSelected] = useState<CurhatMode>("reguler");

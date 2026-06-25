@@ -48,15 +48,20 @@ export default function LocationPickerMap({
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
-  // Keep onChange in a ref so the map initialization effect doesn't re-run
   const onChangeRef = useRef(onChange);
-  useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
+  const isDraggingRef = useRef(false);
+  const lastValueRef = useRef<PickedLocation | null>(null);
 
-  // Initialize map once
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
+
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
     const initial = value ?? DEFAULT_MAP_CENTER;
+    lastValueRef.current = initial;
+
     const map = L.map(containerRef.current, {
       center: [initial.lat, initial.lng],
       zoom: 13,
@@ -70,25 +75,34 @@ export default function LocationPickerMap({
 
     const marker = L.marker([initial.lat, initial.lng], {
       icon: createPinIcon(markerLabel),
-      zIndexOffset: 1000,
       draggable: true,
+      autoPan: true,
+      zIndexOffset: 1000,
     }).addTo(map);
 
-    // Drag support – move the pin anywhere on the map
-    marker.on("dragend", () => {
-      const latlng = marker.getLatLng();
-      onChangeRef.current({ lat: latlng.lat, lng: latlng.lng });
+    marker.on("dragstart", () => {
+      isDraggingRef.current = true;
     });
 
-    // Click on map also moves the pin
+    marker.on("dragend", () => {
+      isDraggingRef.current = false;
+      const latlng = marker.getLatLng();
+      const next = { lat: latlng.lat, lng: latlng.lng };
+      lastValueRef.current = next;
+      onChangeRef.current(next);
+    });
+
     map.on("click", (e) => {
       const next = { lat: e.latlng.lat, lng: e.latlng.lng };
       marker.setLatLng([next.lat, next.lng]);
+      lastValueRef.current = next;
       onChangeRef.current(next);
     });
 
     mapRef.current = map;
     markerRef.current = marker;
+
+    window.setTimeout(() => map.invalidateSize(), 100);
 
     return () => {
       map.off();
@@ -97,24 +111,36 @@ export default function LocationPickerMap({
       markerRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // intentionally run once on mount
+  }, []);
 
-  // Sync marker position when value changes from outside
   useEffect(() => {
     const marker = markerRef.current;
     const map = mapRef.current;
     if (!marker || !map || !value) return;
+    if (isDraggingRef.current) return;
+
+    const prev = lastValueRef.current;
+    if (
+      prev &&
+      Math.abs(prev.lat - value.lat) < 0.000001 &&
+      Math.abs(prev.lng - value.lng) < 0.000001
+    ) {
+      return;
+    }
+
+    lastValueRef.current = value;
     marker.setLatLng([value.lat, value.lng]);
+    map.panTo([value.lat, value.lng]);
   }, [value]);
 
   return (
     <div className={className}>
       <div
         ref={containerRef}
-        className="h-[220px] w-full rounded-xl overflow-hidden border border-[#E5E7EB]"
+        className="relative z-0 h-[220px] w-full rounded-xl overflow-hidden border border-[#E5E7EB]"
       />
       <p className="text-xs text-[#94A3B8] mt-1.5">
-        💡 Klik pada peta atau geser pin untuk memilih lokasi
+        Klik peta atau geser pin untuk memilih lokasi
       </p>
     </div>
   );

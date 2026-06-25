@@ -13,8 +13,9 @@ import LocationPickerMap, {
   type PickedLocation,
 } from "@/components/LocationPickerMap";
 import { useAuth } from "@/context/AuthContext";
-import { ANTRI_HELPERS, type AntriHelper } from "@/data/antri-helpers";
+import { useLocationAddress } from "@/hooks/useLocationAddress";
 import { formatRupiah } from "@/data/orders";
+import { getBrowserLocation } from "@/lib/geolocation";
 import {
   ANTRI_DURATION_OPTIONS,
   ANTRI_HOURLY_RATE,
@@ -24,8 +25,9 @@ import {
   type AntriDurationHours,
 } from "@/lib/antri-mewakili-request";
 import { cn } from "@/lib/utils";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
-const STEPS = ["Lokasi", "Detail", "Pilih Helper", "Konfirmasi"] as const;
+const STEPS = ["Lokasi", "Detail", "Konfirmasi"] as const;
 
 function FormLabel({ children }: { children: React.ReactNode }) {
   return (
@@ -132,76 +134,8 @@ function QueueVisualization() {
   );
 }
 
-function AntriHelperCard({
-  helper,
-  selected,
-  onSelect,
-}: {
-  helper: AntriHelper;
-  selected: boolean;
-  onSelect: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onSelect}
-      className={cn(
-        "w-full rounded-2xl border-2 p-4 sm:p-5 text-left transition-all bg-white",
-        selected
-          ? "border-[#E91E8C] ring-2 ring-[#E91E8C]/20 shadow-md"
-          : "border-[#E5E7EB] hover:border-[#FBCFE8]",
-      )}
-    >
-      <div className="flex gap-4">
-        <div
-          className={cn(
-            "w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold flex-shrink-0",
-            helper.avatarBg,
-          )}
-        >
-          {helper.initials}
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h3 className="text-[#2C1810] font-bold">{helper.name}</h3>
-              <div className="flex flex-wrap gap-2 mt-2">
-                <span className="px-2 py-0.5 rounded-full bg-[#DCFCE7] text-[#16A34A] text-xs font-semibold">
-                  Verified
-                </span>
-                <span className="px-2 py-0.5 rounded-full bg-[#CCFBF1] text-[#0D9488] text-xs font-semibold">
-                  {helper.completedQueues} antrian selesai
-                </span>
-              </div>
-            </div>
-            <div className="text-right flex-shrink-0">
-              <p className="text-[#E91E8C] font-bold">{helper.price}/jam</p>
-              {helper.available && (
-                <p className="text-[#16A34A] text-xs font-semibold mt-1">
-                  Tersedia
-                </p>
-              )}
-            </div>
-          </div>
-          <div className="flex items-center gap-3 mt-3 text-sm text-[#64748B]">
-            <span>
-              <span className="font-bold text-[#2C1810]">
-                {helper.rating.toFixed(2)}
-              </span>{" "}
-              ({helper.reviews} Ulasan)
-            </span>
-            <span className="flex items-center gap-1">
-              <MapPin className="w-3.5 h-3.5" />
-              {helper.distanceKm} km
-            </span>
-          </div>
-        </div>
-      </div>
-    </button>
-  );
-}
-
 export default function JasaBantuAntriMewakili() {
+  usePageTitle("Antri Mewakili | TEMENIN");
   const navigate = useNavigate();
   const { user, isAuthenticated, isLoading } = useAuth();
 
@@ -214,17 +148,14 @@ export default function JasaBantuAntriMewakili() {
   const [durationHours, setDurationHours] = useState<AntriDurationHours>(2);
   const [purpose, setPurpose] = useState("");
   const [notes, setNotes] = useState("");
-  const [selectedHelperId, setSelectedHelperId] = useState(
-    ANTRI_HELPERS[0]?.id ?? 1,
-  );
   const [formError, setFormError] = useState("");
+
+  useLocationAddress(pickedLocation, setLocation);
 
   const pricing = useMemo(
     () => calculateAntriPricing(durationHours),
     [durationHours],
   );
-
-  const selectedHelper = ANTRI_HELPERS.find((h) => h.id === selectedHelperId);
 
   if (isLoading) {
     return (
@@ -253,8 +184,8 @@ export default function JasaBantuAntriMewakili() {
       ...pricing,
     };
 
-    if (!isAntriRequestComplete(request) || !selectedHelper) {
-      setFormError("Lengkapi semua field wajib dan pilih helper terlebih dahulu.");
+    if (!isAntriRequestComplete(request)) {
+      setFormError("Lengkapi semua field wajib terlebih dahulu.");
       return;
     }
 
@@ -262,22 +193,19 @@ export default function JasaBantuAntriMewakili() {
       state: {
         service: "antri-mewakili",
         request,
-        helperId: selectedHelper.id,
+        pickedLocation,
       },
     });
   };
 
-  const handleUseMyLocation = () => {
-    if (!("geolocation" in navigator)) return;
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const next = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        setPickedLocation(next);
-        setFormError("");
-      },
-      () => {},
-      { enableHighAccuracy: true, timeout: 8000 },
-    );
+  const handleUseMyLocation = async () => {
+    try {
+      const pos = await getBrowserLocation();
+      setPickedLocation(pos);
+      setFormError("");
+    } catch {
+      setFormError("Gagal mengambil lokasi. Izinkan akses GPS atau pilih di peta.");
+    }
   };
 
   return (
@@ -436,22 +364,6 @@ export default function JasaBantuAntriMewakili() {
             <QueueVisualization />
           </div>
 
-          <div className="mb-6">
-            <h2 className="text-[#2C1810] font-bold text-base mb-4">
-              Pilih Helper Terdekat
-            </h2>
-            <div className="flex flex-col gap-3">
-              {ANTRI_HELPERS.map((helper) => (
-                <AntriHelperCard
-                  key={helper.id}
-                  helper={helper}
-                  selected={selectedHelperId === helper.id}
-                  onSelect={() => setSelectedHelperId(helper.id)}
-                />
-              ))}
-            </div>
-          </div>
-
           <div className="rounded-2xl border-2 border-[#FBCFE8] bg-[#FFF0F8] p-5 sm:p-6 mb-6">
             <h2 className="text-[#2C1810] font-bold text-xs uppercase tracking-wide mb-4">
               Ringkasan Pesanan
@@ -464,7 +376,7 @@ export default function JasaBantuAntriMewakili() {
               <div className="flex justify-between gap-4">
                 <span className="text-[#64748B]">Helper</span>
                 <span className="text-[#2C1810] font-medium text-right">
-                  {selectedHelper?.name ?? "-"}
+                  Dikirim ke semua helper terdekat
                 </span>
               </div>
               <div className="flex justify-between gap-4">

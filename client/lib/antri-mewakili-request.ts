@@ -55,5 +55,6 @@ export function isAntriRequestComplete(
 export type AntriMewakiliCheckout = {
   service: "antri-mewakili";
   request: AntriMewakiliRequest;
-  helperId: number;
+  helperId?: number;
+  pickedLocation?: { lat: number; lng: number } | null;
 };

@@ -33,7 +33,7 @@ export async function createBooking(input: {
   notes?: string;
 }): Promise<BookingRow> {
   const pool = getPool();
-  const confirmDeadline = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+  const confirmDeadline = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // 24 jam
 
   const result = await pool.query<BookingRow>(
     `INSERT INTO bookings
@@ -84,10 +84,12 @@ export async function findBookingsByUser(
   values.push(options.limit, options.offset);
 
   const result = await pool.query<BookingRow>(
-    `SELECT b.*, u.full_name AS provider_name, u.picture_url AS provider_picture
+    `SELECT b.*, u.full_name AS provider_name, u.picture_url AS provider_picture,
+            pay.status AS payment_status
      FROM bookings b
      JOIN provider_profiles pp ON pp.id = b.provider_id
      JOIN users u ON u.id = pp.user_id
+     LEFT JOIN payments pay ON pay.booking_id = b.id
      WHERE ${conditions.join(" AND ")}
      ORDER BY b.created_at DESC
      LIMIT $${idx} OFFSET $${idx + 1}`,
@@ -114,9 +116,11 @@ export async function findBookingsByProvider(
   values.push(options.limit, options.offset);
 
   const result = await pool.query<BookingRow>(
-    `SELECT b.*, u.full_name AS user_name, u.phone AS user_phone
+    `SELECT b.*, u.full_name AS user_name, u.phone AS user_phone,
+            pay.status AS payment_status
      FROM bookings b
      JOIN users u ON u.id = b.user_id
+     LEFT JOIN payments pay ON pay.booking_id = b.id
      WHERE ${conditions.join(" AND ")}
      ORDER BY b.created_at DESC
      LIMIT $${idx} OFFSET $${idx + 1}`,

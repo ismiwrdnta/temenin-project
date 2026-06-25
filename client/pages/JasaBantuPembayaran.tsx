@@ -10,10 +10,6 @@ import {
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import AppNavbar from "@/components/AppNavbar";
 import { useAuth } from "@/context/AuthContext";
-import { useOrders } from "@/context/OrderContext";
-import type { AntriHelper } from "@/data/antri-helpers";
-import { getAntriHelperById } from "@/data/antri-helpers";
-import { getBantuHelperById } from "@/data/bantu-helpers";
 import { formatRupiah } from "@/data/orders";
 import {
   PAYMENT_CATEGORIES,
@@ -27,7 +23,12 @@ import {
   isAntriMewakiliCheckout,
   type BantuCheckout,
 } from "@/lib/bantu-checkout";
+import {
+  createActivityRequest,
+  payActivityRequest,
+} from "@/lib/activityRequestApi";
 import { cn } from "@/lib/utils";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 function PaymentMethodButton({
   method,
@@ -155,10 +156,10 @@ function PaymentDetail({
 }
 
 export default function JasaBantuPembayaran() {
+  usePageTitle("Pembayaran | TEMENIN");
   const navigate = useNavigate();
   const location = useLocation();
   const { user, isAuthenticated, isLoading } = useAuth();
-  const { createAmbilRaporOrder, createAntriMewakiliOrder } = useOrders();
 
   const checkout = location.state as BantuCheckout | null;
 
@@ -167,13 +168,6 @@ export default function JasaBantuPembayaran() {
   const antriMewakili =
     checkout && isAntriMewakiliCheckout(checkout) ? checkout : null;
 
-  const raporHelper = ambilRapor
-    ? getBantuHelperById(ambilRapor.helperId)
-    : undefined;
-  const antriHelper = antriMewakili
-    ? getAntriHelperById(antriMewakili.helperId)
-    : undefined;
-
   const totalPrice =
     ambilRapor?.request.totalPrice ?? antriMewakili?.request.totalPrice ?? 0;
 
@@ -181,6 +175,7 @@ export default function JasaBantuPembayaran() {
     useState<PaymentCategory>("va");
   const [selectedMethodId, setSelectedMethodId] = useState("va-bca");
   const [isPaying, setIsPaying] = useState(false);
+  const [payError, setPayError] = useState<string | null>(null);
 
   const methodsInCategory = useMemo(
     () => PAYMENT_METHODS.filter((m) => m.category === activeCategory),
@@ -206,13 +201,13 @@ export default function JasaBantuPembayaran() {
     return <Navigate to="/dashboard-penyedia" replace />;
   }
 
-  if (!checkout || (!ambilRapor && !antriMewakili) || (!raporHelper && !antriHelper)) {
+  if (!checkout || (!ambilRapor && !antriMewakili)) {
     return <Navigate to="/jasa-bantu" replace />;
   }
 
   const backTo =
     ambilRapor != null
-      ? "/jasa-bantu/ambil-rapor/helper"
+      ? "/jasa-bantu/ambil-rapor"
       : "/jasa-bantu/antri-mewakili";
   const backState = ambilRapor?.request ?? antriMewakili?.request;
 
@@ -222,29 +217,39 @@ export default function JasaBantuPembayaran() {
     if (first) setSelectedMethodId(first.id);
   };
 
-  const handlePay = () => {
+  const handlePay = async () => {
     if (!selectedMethod) return;
     setIsPaying(true);
+    setPayError(null);
 
-    const order = ambilRapor && raporHelper
-      ? createAmbilRaporOrder({
-          helper: raporHelper,
-          request: ambilRapor.request,
-          paymentMethod: selectedMethod.label,
-          customer: { name: user.name },
-        })
-      : antriMewakili && antriHelper
-        ? createAntriMewakiliOrder({
-            helper: antriHelper,
-            request: antriMewakili.request,
-            paymentMethod: selectedMethod.label,
-            customer: { name: user.name },
-          })
-        : null;
+    try {
+      const pickedLocation =
+        ambilRapor?.pickedLocation ?? antriMewakili?.pickedLocation ?? null;
+      const address =
+        ambilRapor?.request.schoolAddress ??
+        antriMewakili?.request.location ??
+        undefined;
 
-    if (!order) return;
+      const created = await createActivityRequest({
+        request_type: ambilRapor ? "ambil_rapor" : "antri_mewakili",
+        latitude: pickedLocation?.lat,
+        longitude: pickedLocation?.lng,
+        address,
+        payload: ambilRapor
+          ? { ...ambilRapor.request, queueDate: ambilRapor.request.reportDate, startTime: "08:00", durationHours: 4 }
+          : { ...antriMewakili!.request },
+        total_price: totalPrice,
+      });
 
-    navigate(`/pesanan/${order.id}`);
+      await payActivityRequest(created.id);
+      navigate(`/jasa-bantu/permintaan/${created.id}`);
+    } catch (err) {
+      setPayError(
+        err instanceof Error ? err.message : "Gagal memproses pembayaran.",
+      );
+    } finally {
+      setIsPaying(false);
+    }
   };
 
   return (
@@ -273,21 +278,16 @@ export default function JasaBantuPembayaran() {
           </div>
 
           <div className="rounded-2xl border border-[#E5E7EB] bg-white p-5 sm:p-6 mb-6 shadow-sm">
-            {ambilRapor && raporHelper && (
+            {ambilRapor && (
               <>
                 <div className="flex items-center gap-4 mb-4">
-                  <div
-                    className={cn(
-                      "w-12 h-12 rounded-xl flex items-center justify-center font-bold text-white",
-                      raporHelper.avatarBg,
-                    )}
-                  >
-                    {raporHelper.initials}
+                  <div className="w-12 h-12 rounded-xl flex items-center justify-center font-bold text-white bg-[#0D9488]">
+                    AR
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[#2C1810] font-bold">{raporHelper.name}</p>
+                    <p className="text-[#2C1810] font-bold">Ambil Rapor</p>
                     <p className="text-[#64748B] text-sm truncate">
-                      Ambil Rapor • {ambilRapor.request.schoolName}
+                      {ambilRapor.request.schoolName}
                     </p>
                   </div>
                   <p className="text-[#0D9488] font-bold text-lg flex-shrink-0">
@@ -312,21 +312,16 @@ export default function JasaBantuPembayaran() {
                 </div>
               </>
             )}
-            {antriMewakili && antriHelper && (
+            {antriMewakili && (
               <>
                 <div className="flex items-center gap-4 mb-4">
-                  <div
-                    className={cn(
-                      "w-12 h-12 rounded-xl flex items-center justify-center font-bold text-white",
-                      antriHelper.avatarBg,
-                    )}
-                  >
-                    {antriHelper.initials}
+                  <div className="w-12 h-12 rounded-xl flex items-center justify-center font-bold text-white bg-[#E91E8C]">
+                    AM
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[#2C1810] font-bold">{antriHelper.name}</p>
+                    <p className="text-[#2C1810] font-bold">Antri Mewakili</p>
                     <p className="text-[#64748B] text-sm truncate">
-                      Antri Mewakili • {antriMewakili.request.location}
+                      {antriMewakili.request.location}
                     </p>
                   </div>
                   <p className="text-[#E91E8C] font-bold text-lg flex-shrink-0">
@@ -408,6 +403,10 @@ export default function JasaBantuPembayaran() {
               dikonfirmasi.
             </p>
           </div>
+
+          {payError && (
+            <p className="text-[#DC2626] text-sm mb-4 text-center">{payError}</p>
+          )}
 
           <button
             type="button"

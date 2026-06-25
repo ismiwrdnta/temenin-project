@@ -29,16 +29,22 @@ import JasaBantuPembayaran from "./pages/JasaBantuPembayaran";
 import JasaBantuAntriMewakili from "./pages/JasaBantuAntriMewakili";
 import JasaBantuBelanjaTitip from "./pages/JasaBantuBelanjaTitip";
 import JasaBantuBelanjaTitipPembayaran from "./pages/JasaBantuBelanjaTitipPembayaran";
+import JasaBantuPermintaanMenunggu from "./pages/JasaBantuPermintaanMenunggu";
 import Pesanan from "./pages/Pesanan";
 import DetailPesanan from "./pages/DetailPesanan";
 import BeriUlasan from "./pages/BeriUlasan";
 import DashboardPenyedia from "./pages/DashboardPenyedia";
+import ProfilPengguna from "./pages/ProfilPengguna";
 import DashboardAdmin from "./pages/DashboardAdmin";
 import ProfilPenyedia from "./pages/ProfilPenyedia";
+import PilihLayananProvider from "./pages/PilihLayananProvider";
+import Notifikasi from "./pages/Notifikasi";
 import WalletPenyedia from "./pages/WalletPenyedia";
 import { AuthProvider } from "@/context/AuthContext";
 import { GoogleOAuthShell } from "@/components/GoogleOAuthShell";
 import { OrderProvider } from "@/context/OrderContext";
+import { NotificationProvider } from "@/context/NotificationContext";
+import NotificationToast from "@/components/NotificationToast";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -51,7 +57,9 @@ const App = () => (
       <BrowserRouter>
         <GoogleOAuthShell>
         <AuthProvider>
+        <NotificationProvider>
         <OrderProvider>
+        <NotificationToast />
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/daftar" element={<Daftar />} />
@@ -60,6 +68,9 @@ const App = () => (
           <Route path="/daftar-provider" element={<DaftarProvider />} />
           <Route path="/dashboard" element={<DashboardPengguna />} />
           <Route path="/dashboard-penyedia" element={<DashboardPenyedia />} />
+          <Route path="/profil" element={<ProfilPengguna />} />
+          <Route path="/provider/:providerId/pilih-layanan" element={<PilihLayananProvider />} />
+          <Route path="/notifikasi" element={<Notifikasi />} />
           <Route path="/dashboard-admin" element={<DashboardAdmin />} />
           <Route path="/profil-penyedia" element={<ProfilPenyedia />} />
           <Route path="/wallet-penyedia" element={<WalletPenyedia />} />
@@ -111,6 +122,10 @@ const App = () => (
             path="/jasa-bantu/belanja-titip/pembayaran"
             element={<JasaBantuBelanjaTitipPembayaran />}
           />
+          <Route
+            path="/jasa-bantu/permintaan/:id"
+            element={<JasaBantuPermintaanMenunggu />}
+          />
           <Route path="/pesanan" element={<Pesanan />} />
           <Route path="/pesanan/:id" element={<DetailPesanan />} />
           <Route path="/pesanan/:id/ulasan" element={<BeriUlasan />} />
@@ -118,6 +133,7 @@ const App = () => (
           <Route path="*" element={<NotFound />} />
         </Routes>
         </OrderProvider>
+        </NotificationProvider>
         </AuthProvider>
         </GoogleOAuthShell>
       </BrowserRouter>

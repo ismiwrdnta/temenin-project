@@ -8,6 +8,7 @@ import {
   type AmbilRaporRequest,
 } from "@/lib/ambil-rapor-request";
 import { cn } from "@/lib/utils";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 function HelperCard({
   helper,
@@ -80,6 +81,7 @@ function HelperCard({
 }
 
 export default function JasaBantuPilihHelper() {
+  usePageTitle("Pilih Helper | TEMENIN");
   const navigate = useNavigate();
   const location = useLocation();
   const { user, isAuthenticated, isLoading } = useAuth();

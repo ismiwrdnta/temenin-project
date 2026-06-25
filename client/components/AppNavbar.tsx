@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
-import { LogOut } from "lucide-react";
+import { Bell, LogOut } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
 
@@ -8,7 +8,7 @@ const NAV_ITEMS = [
   { label: "Pencarian", path: "/pencarian", key: "pencarian" },
   { label: "Jasa Temenin", path: "/jasa-temenin", key: "jasa" },
   { label: "Pesanan", path: "/pesanan", key: "pesanan" },
-  { label: "Profil", path: "#", key: "profil" },
+  { label: "Profil", path: "/profil", key: "profil" },
 ] as const;
 
 type NavKey = (typeof NAV_ITEMS)[number]["key"];
@@ -70,12 +70,20 @@ export default function AppNavbar({
               {displayName}
             </p>
           </div>
-          <div
-            className="w-10 h-10 rounded-full bg-[#FBCFE8] flex items-center justify-center text-[#E91E8C] font-bold text-sm border border-[#F9A8D4]"
+          <Link
+            to="/notifikasi"
+            className="w-9 h-9 rounded-full flex items-center justify-center text-[#94A3B8] hover:text-[#E91E8C] hover:bg-[#FDF4FF] transition-colors"
+            title="Notifikasi"
+          >
+            <Bell className="w-4.5 h-4.5" />
+          </Link>
+          <Link
+            to="/profil"
+            className="w-10 h-10 rounded-full bg-[#FBCFE8] flex items-center justify-center text-[#E91E8C] font-bold text-sm border border-[#F9A8D4] hover:ring-2 hover:ring-[#E91E8C]/40 transition-shadow"
             title={displayName}
           >
             {displayInitials}
-          </div>
+          </Link>
           <button
             type="button"
             onClick={handleLogout}

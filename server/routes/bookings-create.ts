@@ -43,6 +43,14 @@ export const handleCreateBooking: RequestHandler = async (req, res) => {
       res.status(400).json({ error: "Provider belum terverifikasi." });
       return;
     }
+    if (provider.is_banned) {
+      res.status(400).json({ error: "Provider tidak tersedia saat ini." });
+      return;
+    }
+    if (provider.suspended_until && new Date(provider.suspended_until) > new Date()) {
+      res.status(400).json({ error: "Provider sedang tidak tersedia saat ini." });
+      return;
+    }
     if (provider.user_id === userId) {
       res.status(400).json({ error: "Tidak bisa memesan diri sendiri." });
       return;

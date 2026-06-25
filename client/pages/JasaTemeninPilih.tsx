@@ -5,6 +5,7 @@ import AppNavbar from "@/components/AppNavbar";
 import { useAuth } from "@/context/AuthContext";
 import type { TemeninMode } from "@/data/temenin-companions";
 import { cn } from "@/lib/utils";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 const OPTIONS = [
   {
@@ -40,6 +41,7 @@ const OPTIONS = [
 ] as const;
 
 export default function JasaTemeninPilih() {
+  usePageTitle("Pilih Teman | TEMENIN");
   const navigate = useNavigate();
   const { user, isAuthenticated, isLoading } = useAuth();
   const [selected, setSelected] = useState<TemeninMode>("tatap-muka");

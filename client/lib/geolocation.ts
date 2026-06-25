@@ -24,3 +24,46 @@ export function getBrowserLocation(): Promise<GeoPoint> {
     );
   });
 }
+
+/** Reverse geocode via OpenStreetMap Nominatim (gratis, tanpa API key) */
+export async function reverseGeocode(
+  lat: number,
+  lng: number,
+): Promise<string | null> {
+  try {
+    const url = new URL("https://nominatim.openstreetmap.org/reverse");
+    url.searchParams.set("format", "jsonv2");
+    url.searchParams.set("lat", String(lat));
+    url.searchParams.set("lon", String(lng));
+    url.searchParams.set("accept-language", "id");
+
+    const res = await fetch(url.toString(), {
+      headers: { Accept: "application/json" },
+    });
+    if (!res.ok) return null;
+
+    const data = (await res.json()) as {
+      display_name?: string;
+      address?: Record<string, string>;
+    };
+
+    if (data.display_name) {
+      const parts = data.display_name.split(",").slice(0, 4).map((p) => p.trim());
+      return parts.join(", ");
+    }
+
+    const addr = data.address;
+    if (!addr) return null;
+
+    const segments = [
+      addr.road,
+      addr.neighbourhood ?? addr.suburb,
+      addr.city ?? addr.town ?? addr.village,
+      addr.state,
+    ].filter(Boolean);
+
+    return segments.length > 0 ? segments.join(", ") : null;
+  } catch {
+    return null;
+  }
+}

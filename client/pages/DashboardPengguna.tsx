@@ -7,18 +7,13 @@ import { useAuth } from "@/context/AuthContext";
 import { useOrders } from "@/context/OrderContext";
 import { useMapLocation } from "@/hooks/useMapLocation";
 import { listBookings, mapBookingToOrder, searchProviders } from "@/lib/bookingApi";
+import { getStoredToken } from "@/lib/authApi";
 import { mapApiProviderToMapProvider } from "@/lib/provider-map";
 import { cn } from "@/lib/utils";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 function getProviderLink(provider: MapProvider): string {
-  const tags = provider.tags.map((t) => t.toLowerCase());
-  if (tags.includes("temenin")) {
-    return `/jasa-temenin/pesan/tatap-muka/${provider.id}`;
-  }
-  if (tags.includes("curhat")) {
-    return `/jasa-curhat/pesan/reguler/${provider.id}`;
-  }
-  return `/pencarian`;
+  return `/provider/${provider.id}/pilih-layanan`;
 }
 
 const EMPTY_STATS = {
@@ -119,12 +114,19 @@ function StatCard({
 }
 
 export default function DashboardPengguna() {
+  usePageTitle("Dashboard | TEMENIN");
   const navigate = useNavigate();
   const { user, isAuthenticated, isLoading } = useAuth();
   const { orders: localOrders } = useOrders();
   const { userLocation } = useMapLocation();
   const [nearbyProviders, setNearbyProviders] = useState<MapProvider[]>([]);
   const [apiOrders, setApiOrders] = useState<ReturnType<typeof mapBookingToOrder>[]>([]);
+  const [userBalance, setUserBalance] = useState(0);
+  const [showTopup, setShowTopup] = useState(false);
+  const [topupAmount, setTopupAmount] = useState("");
+  const [topupLoading, setTopupLoading] = useState(false);
+  const [topupError, setTopupError] = useState<string | null>(null);
+  const [topupSuccess, setTopupSuccess] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -140,6 +142,15 @@ export default function DashboardPengguna() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const token = getStoredToken();
+    fetch("/api/user/balance", { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+      .then((r) => r.json())
+      .then((d) => { if (d?.data?.balance != null) setUserBalance(parseFloat(d.data.balance)); })
+      .catch(() => {});
+  }, [isAuthenticated, topupSuccess]);
 
   useEffect(() => {
     if (!userLocation) return;
@@ -202,15 +213,25 @@ export default function DashboardPengguna() {
     return <Navigate to="/dashboard-admin" replace />;
   }
 
+  const ratingCount = useMemo(
+    () => orders.filter((o) => o.status === "selesai" && o.reviewStatus === "sent").length,
+    [orders],
+  );
+
+  const curhatCount = useMemo(
+    () => orders.filter((o) => o.status === "selesai" && o.serviceCategory === "curhat").length,
+    [orders],
+  );
+
   const userData = {
     name: user.name,
     initials: user.initials,
-    balance: EMPTY_STATS.balance,
+    balance: userBalance,
     stats: {
       active: activeOrders.length,
       completed: completedCount,
-      rating: EMPTY_STATS.stats.rating,
-      curhat: EMPTY_STATS.stats.curhat,
+      rating: ratingCount,
+      curhat: curhatCount,
     },
   };
 
@@ -227,12 +248,97 @@ export default function DashboardPengguna() {
       .replace("Rp", "Rp ");
   };
 
+  const TOPUP_PRESETS = [20000, 50000, 100000, 200000];
+
+  async function handleTopup() {
+    const amount = parseFloat(topupAmount.replace(/\D/g, ""));
+    if (!amount || amount < 10000) {
+      setTopupError("Minimal top-up Rp 10.000.");
+      return;
+    }
+    if (amount > 10000000) {
+      setTopupError("Maksimal top-up Rp 10.000.000.");
+      return;
+    }
+    const token = getStoredToken();
+    setTopupLoading(true);
+    setTopupError(null);
+    try {
+      const res = await fetch("/api/user/topup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ amount }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d?.error ?? "Gagal top-up.");
+      setUserBalance(d.data.balance);
+      setTopupSuccess(true);
+      setTimeout(() => { setShowTopup(false); setTopupSuccess(false); }, 2000);
+    } catch (err) {
+      setTopupError(err instanceof Error ? err.message : "Gagal top-up.");
+    } finally {
+      setTopupLoading(false);
+    }
+  }
+
   return (
     <div className="min-h-screen w-full bg-[#F8F9FA] font-['Poppins',sans-serif] flex flex-col">
       <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
         <div className="absolute top-[-5%] left-[-5%] w-[30%] h-[30%] bg-[#FDF4FF] rounded-full blur-3xl opacity-50" />
         <div className="absolute bottom-[-5%] right-[-5%] w-[30%] h-[30%] bg-[#F3E8FF] rounded-full blur-3xl opacity-50" />
       </div>
+
+      {/* Modal Top-Up */}
+      {showTopup && (
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm px-4">
+          <div className="w-full max-w-md bg-white rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl">
+            {topupSuccess ? (
+              <div className="py-8 flex flex-col items-center text-center">
+                <div className="w-16 h-16 rounded-full bg-[#DCFCE7] flex items-center justify-center mb-4">
+                  <span className="text-3xl">✓</span>
+                </div>
+                <p className="text-[#2C1810] font-bold text-lg">Top-Up Berhasil!</p>
+                <p className="text-[#94A3B8] text-sm mt-1">Saldo kamu sudah diperbarui.</p>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center justify-between mb-5">
+                  <h3 className="text-[#2C1810] font-bold text-lg">Isi Saldo TEMENIN</h3>
+                  <button type="button" onClick={() => setShowTopup(false)} className="text-[#94A3B8] hover:text-[#2C1810] text-xl">✕</button>
+                </div>
+                <p className="text-[#94A3B8] text-xs mb-4">Saldo tersedia: <span className="font-semibold text-[#4C1D95]">{formatRupiah(userBalance)}</span></p>
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {TOPUP_PRESETS.map((p) => (
+                    <button key={p} type="button" onClick={() => setTopupAmount(String(p))}
+                      className={cn("px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors",
+                        topupAmount === String(p) ? "bg-[#E91E8C] border-[#E91E8C] text-white" : "border-[#E9D5FF] text-[#7C3AED] bg-[#FDF4FF] hover:border-[#E91E8C]")}
+                    >
+                      {formatRupiah(p)}
+                    </button>
+                  ))}
+                </div>
+                <div className="relative mb-3">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[#94A3B8] text-sm font-medium">Rp</span>
+                  <input type="text" inputMode="numeric" value={topupAmount}
+                    onChange={(e) => setTopupAmount(e.target.value.replace(/\D/g, ""))}
+                    placeholder="Nominal lainnya..."
+                    className="w-full pl-10 pr-4 py-3.5 bg-[#F8F9FA] border border-[#F3E8FF] rounded-xl text-[#2C1810] text-sm focus:outline-none focus:ring-2 focus:ring-[#E91E8C]/30"
+                  />
+                </div>
+                {topupAmount && Number(topupAmount) >= 10000 && (
+                  <p className="text-[#94A3B8] text-xs mb-3">= {formatRupiah(parseFloat(topupAmount) || 0)}</p>
+                )}
+                {topupError && <p className="text-[#DC2626] text-xs mb-3">{topupError}</p>}
+                <button type="button" onClick={handleTopup} disabled={topupLoading}
+                  className="w-full py-3.5 rounded-xl text-white font-semibold text-sm bg-gradient-to-r from-[#E91E8C] to-[#A131CC] hover:opacity-90 transition-opacity disabled:opacity-60">
+                  {topupLoading ? "Memproses..." : "Konfirmasi Top-Up"}
+                </button>
+                <p className="text-[#94A3B8] text-[10px] text-center mt-3 leading-relaxed">Simulasi pembayaran. Dana akan masuk ke saldo TEMENIN kamu.</p>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       <AppNavbar
         activePage="beranda"
@@ -295,6 +401,8 @@ export default function DashboardPengguna() {
                 )}
               </div>
               <button
+                type="button"
+                onClick={() => { setShowTopup(true); setTopupError(null); setTopupSuccess(false); setTopupAmount(""); }}
                 className={cn(
                   "mt-6 px-4 py-2 rounded-lg font-medium text-sm transition-colors flex items-center gap-1 shadow-sm w-fit",
                   hasBalance

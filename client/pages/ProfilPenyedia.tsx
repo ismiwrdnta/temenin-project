@@ -13,6 +13,7 @@ import {
 } from "@/lib/bookingApi";
 import { DEFAULT_MAP_CENTER } from "@/lib/geolocation";
 import { cn } from "@/lib/utils";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 const SERVICE_OPTIONS = [
   "Jasa Temenin",
@@ -160,6 +161,7 @@ function TagSelect({
 }
 
 export default function ProfilPenyedia() {
+  usePageTitle("Profil Provider | TEMENIN");
   const navigate = useNavigate();
   const { user } = useAuth();
 

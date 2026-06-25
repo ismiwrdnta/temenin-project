@@ -7,6 +7,7 @@ import { useAuth } from "@/context/AuthContext";
 import { searchProviders, type ProviderSearchResult } from "@/lib/bookingApi";
 import { anonListenerAlias } from "@/lib/provider-map";
 import { cn } from "@/lib/utils";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 function ListenerCard({
   provider,
@@ -77,6 +78,7 @@ function ListenerCard({
 }
 
 export default function JasaCurhatAnonim() {
+  usePageTitle("Curhat Anonim | TEMENIN");
   const navigate = useNavigate();
   const { user, isAuthenticated, isLoading } = useAuth();
   const [providers, setProviders] = useState<ProviderSearchResult[]>([]);

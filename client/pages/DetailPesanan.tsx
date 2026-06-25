@@ -5,8 +5,11 @@ import {
   Check,
   ClipboardList,
   Lock,
+  RefreshCw,
   Send,
+  UserSearch,
   X,
+  XCircle,
 } from "lucide-react";
 import AppNavbar from "@/components/AppNavbar";
 import ProviderNavbar from "@/components/ProviderNavbar";
@@ -25,12 +28,101 @@ import {
   getChatHistory,
   isUuid,
   mapBookingToOrder,
+  reportSos,
   sendChatMessage,
+  simulatePayment,
 } from "@/lib/bookingApi";
 import { cn } from "@/lib/utils";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
-function PendingBanner({ order }: { order: Order }) {
+// ─── SOS Modal ────────────────────────────────────────────────────────────────
+
+function SosModal({
+  bookingId,
+  onClose,
+}: {
+  bookingId: string | number;
+  onClose: () => void;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleConfirm() {
+    setLoading(true);
+    setError(null);
+    try {
+      await reportSos(String(bookingId), "Pelanggaran dilaporkan melalui SOS");
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gagal melaporkan.");
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={loading ? undefined : onClose} />
+      <div className="relative w-full max-w-sm bg-white rounded-2xl shadow-2xl overflow-hidden">
+        <div className="bg-gradient-to-r from-[#DC2626] to-[#EA580C] px-5 py-4 flex items-center justify-between">
+          <span className="text-white font-bold text-sm">🆘 Laporan SOS</span>
+          {!loading && (
+            <button type="button" onClick={onClose} className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center text-white hover:bg-white/30">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+        <div className="p-6">
+          <p className="text-[#2C1810] font-bold text-base mb-2">Laporkan Pelanggaran?</p>
+          <p className="text-[#64748B] text-sm mb-5 leading-relaxed">
+            Kamu akan melaporkan pelanggaran oleh provider. Laporan ini akan diproses dan tindakan akan diambil sesuai kebijakan platform.
+          </p>
+          {error && (
+            <div className="mb-4 px-3 py-2 rounded-lg bg-[#FEF2F2] border border-[#FECACA] text-[#DC2626] text-xs">{error}</div>
+          )}
+          <div className="flex gap-3">
+            <button type="button" onClick={onClose} disabled={loading} className="flex-1 py-2.5 rounded-xl border border-[#E5E7EB] text-[#64748B] text-sm font-medium hover:bg-[#F8FAFC] transition-colors disabled:opacity-60">
+              Batal
+            </button>
+            <button type="button" onClick={handleConfirm} disabled={loading} className="flex-1 py-2.5 rounded-xl bg-[#DC2626] hover:bg-[#B91C1C] text-white text-sm font-bold transition-colors disabled:opacity-60">
+              {loading ? "Melaporkan..." : "Ya, Laporkan"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PendingBanner({
+  order,
+  bookingId,
+  onPaid,
+}: {
+  order: Order;
+  bookingId?: string | null;
+  onPaid?: () => void;
+}) {
+  const [paying, setPaying] = useState(false);
+  const [payError, setPayError] = useState<string | null>(null);
+  const needsPayment = order.paymentMethod === "Belum dibayar";
+
   if (order.status !== "pending") return null;
+
+  async function handlePay() {
+    if (!bookingId) return;
+    setPayError(null);
+    setPaying(true);
+    try {
+      await simulatePayment(bookingId);
+      onPaid?.();
+    } catch (err) {
+      setPayError(
+        err instanceof Error ? err.message : "Gagal memproses pembayaran.",
+      );
+    } finally {
+      setPaying(false);
+    }
+  }
 
   return (
     <div className="bg-[#FEFCE8] border border-[#FACC15] rounded-2xl p-5 flex flex-col gap-3">
@@ -53,9 +145,31 @@ function PendingBanner({ order }: { order: Order }) {
           <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
         </svg>
         <p className="text-[#16A34A] text-xs font-medium">
-          Pembayaran <span className="font-bold">{order.paymentMethod === "Belum dibayar" ? "belum dikonfirmasi" : "sudah dikonfirmasi"}</span> — halaman ini otomatis update
+          Pembayaran{" "}
+          <span className="font-bold">
+            {needsPayment ? "belum dilakukan" : "sudah dikonfirmasi"}
+          </span>
+          {needsPayment ? "" : " — halaman ini otomatis update"}
         </p>
       </div>
+      {needsPayment && bookingId && (
+        <div className="space-y-2">
+          <button
+            type="button"
+            disabled={paying}
+            onClick={handlePay}
+            className="w-full py-3 rounded-xl text-white font-semibold text-sm bg-gradient-to-r from-[#7C3AED] to-[#E91E8C] hover:opacity-90 disabled:opacity-60"
+          >
+            {paying ? "Memproses..." : `Bayar ${formatRupiah(order.price)} (Simulasi)`}
+          </button>
+          <p className="text-[#94A3B8] text-xs text-center">
+            Di development, pembayaran disimulasikan otomatis tanpa Midtrans.
+          </p>
+        </div>
+      )}
+      {payError && (
+        <p className="text-[#DC2626] text-xs text-center">{payError}</p>
+      )}
     </div>
   );
 }
@@ -83,7 +197,57 @@ function SessionBanner({ order }: { order: Order }) {
   );
 }
 
-function ProviderCard({ order }: { order: Order }) {
+/** Route helper: map serviceCategory → search/booking URL */
+function getSearchRouteForCategory(serviceCategory?: string): string {
+  switch (serviceCategory) {
+    case "temenin":       return "/jasa-temenin/pilih";
+    case "curhat":        return "/jasa-curhat/pilih";
+    case "bantu_aktivitas": return "/jasa-bantu";
+    default:             return "/pencarian";
+  }
+}
+
+function RejectedBanner({ order }: { order: Order }) {
+  if (order.status !== "dibatalkan") return null;
+  const searchRoute = getSearchRouteForCategory(order.serviceCategory);
+
+  return (
+    <div className="bg-[#FEF2F2] border border-[#FECACA] rounded-2xl p-5 flex flex-col gap-4">
+      <div className="flex items-start gap-3">
+        <XCircle className="w-6 h-6 text-[#DC2626] flex-shrink-0 mt-0.5" />
+        <div>
+          <h2 className="text-[#DC2626] font-bold text-base">Pesanan Ditolak</h2>
+          <p className="text-[#64748B] text-sm mt-1">
+            {order.cancelReason
+              ? order.cancelReason
+              : "Provider tidak dapat menerima pesanan ini."}
+          </p>
+        </div>
+      </div>
+      <div className="flex flex-col sm:flex-row gap-2">
+        <Link
+          to={searchRoute}
+          className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-gradient-to-r from-[#E91E8C] to-[#7C3AED] text-white font-semibold text-sm hover:opacity-90 transition-opacity shadow-sm"
+        >
+          <UserSearch className="w-4 h-4" />
+          Pilih Provider Lain
+        </Link>
+        <Link
+          to="/pesanan"
+          className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border border-[#E5E7EB] text-[#64748B] font-semibold text-sm hover:bg-[#F8FAFC] transition-colors"
+        >
+          <RefreshCw className="w-4 h-4" />
+          Kembali ke Pesanan
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+function ProviderCard({ order, isProviderView }: { order: Order; isProviderView: boolean }) {
+  const displayPrice = isProviderView ? (order.providerEarnings ?? order.price) : order.price;
+  const priceLabel = isProviderView ? "Pendapatan kamu" : "Total dibayar";
+
   return (
     <div className="bg-white rounded-2xl p-5 lg:p-6 shadow-sm border border-gray-100">
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
@@ -129,10 +293,15 @@ function ProviderCard({ order }: { order: Order }) {
         </div>
 
         <div className="sm:text-right flex-shrink-0">
-          <p className="text-[#94A3B8] text-xs">Total dibayar</p>
+          <p className="text-[#94A3B8] text-xs">{priceLabel}</p>
           <p className="text-[#2C1810] font-bold text-xl">
-            {formatRupiah(order.price)}
+            {formatRupiah(displayPrice)}
           </p>
+          {isProviderView && order.providerEarnings != null && (
+            <p className="text-[#94A3B8] text-xs mt-0.5">
+              setelah komisi platform 10%
+            </p>
+          )}
           <p className="text-[#94A3B8] text-sm mt-0.5">{order.duration}</p>
         </div>
       </div>
@@ -140,14 +309,17 @@ function ProviderCard({ order }: { order: Order }) {
   );
 }
 
-function OrderSummary({ order }: { order: Order }) {
+function OrderSummary({ order, isProviderView }: { order: Order; isProviderView: boolean }) {
   const rows = [
     { label: "Kategori Jasa", value: order.service },
     { label: "Durasi", value: order.duration },
     { label: "Tanggal & Waktu", value: order.datetimeRange },
     { label: "Tarif", value: order.hourlyRate },
-    { label: "Metode Bayar", value: order.paymentMethod },
+    ...(!isProviderView ? [{ label: "Metode Bayar", value: order.paymentMethod }] : []),
   ];
+
+  const totalLabel = isProviderView ? "Pendapatan bersih" : "Total";
+  const totalAmount = isProviderView ? (order.providerEarnings ?? order.price) : order.price;
 
   return (
     <div className="bg-white rounded-2xl p-5 lg:p-6 shadow-sm border border-gray-100">
@@ -168,12 +340,24 @@ function OrderSummary({ order }: { order: Order }) {
             </span>
           </div>
         ))}
+        {isProviderView && order.providerEarnings != null && (
+          <>
+            <div className="flex items-center justify-between gap-4 text-sm">
+              <span className="text-[#94A3B8]">Total dari pengguna</span>
+              <span className="text-[#2C1810] font-medium">{formatRupiah(order.price)}</span>
+            </div>
+            <div className="flex items-center justify-between gap-4 text-sm">
+              <span className="text-[#94A3B8]">Komisi platform (10%)</span>
+              <span className="text-[#DC2626] font-medium">- {formatRupiah(order.price - order.providerEarnings)}</span>
+            </div>
+          </>
+        )}
       </div>
 
       <div className="border-t border-dashed border-[#E9D5FF] mt-4 pt-4 flex items-center justify-between">
-        <span className="text-[#2C1810] font-bold text-sm">Total</span>
+        <span className="text-[#2C1810] font-bold text-sm">{totalLabel}</span>
         <span className="text-[#2C1810] font-bold text-base">
-          {formatRupiah(order.price)}
+          {formatRupiah(totalAmount)}
         </span>
       </div>
     </div>
@@ -196,91 +380,84 @@ function EscrowBanner({ order }: { order: Order }) {
   );
 }
 
-const MOCK_REPLIES: Record<string, string[]> = {
-  default: [
-    "Halo! Senang bisa chat denganmu 😊",
-    "Aku siap mendengarkan, ceritakan saja apa yang ada di pikiranmu.",
-    "Aku di sini ya, nggak kemana-mana 💙",
-    "Hmm, aku mengerti perasaanmu. Lanjutkan saja ceritanya.",
-    "Terima kasih sudah mau berbagi. Itu pasti tidak mudah.",
-    "Aku dengar kamu. Kamu sudah sangat berani dengan menceritakan ini 🌟",
-    "Bagaimana perasaanmu sekarang setelah bercerita?",
-  ],
-};
-
-function getRandomReply(): string {
-  const replies = MOCK_REPLIES.default;
-  return replies[Math.floor(Math.random() * replies.length)];
-}
-
 function LiveChat({
   order,
+  bookingId,
+  userId,
   onSendMessage,
+  onMessagesUpdate,
 }: {
   order: Order;
+  bookingId: string | null;
+  userId?: string;
   onSendMessage: (text: string) => Promise<void>;
+  onMessagesUpdate: (msgs: ChatMessage[]) => void;
 }) {
   const [message, setMessage] = useState("");
-  const [localMessages, setLocalMessages] = useState<ChatMessage[]>([]);
   const [isSending, setIsSending] = useState(false);
-  const [isTyping, setIsTyping] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const isLegacyOrder = typeof order.id === "number";
-
-  // Show chat for both pending AND berlangsung (curhat starts chat immediately)
+  const isLegacyOrder = !bookingId;
   const isCurhat = order.service.toLowerCase().includes("curhat");
-  const showChat = order.status === "berlangsung" || (isCurhat && order.status === "pending");
+  const showChat =
+    order.status === "berlangsung" || (isCurhat && order.status === "pending");
+
+  // ── Real-time polling (API orders only) ────────────────────────────────────
+  useEffect(() => {
+    if (!showChat || isLegacyOrder || !bookingId) return;
+
+    async function fetchMessages() {
+      try {
+        const chat = await getChatHistory(bookingId!);
+        const mapped: ChatMessage[] = chat.messages.map((m) => ({
+          id: m.id,
+          sender: m.sender_id === userId ? ("user" as const) : ("provider" as const),
+          text: m.content ?? "",
+          time: new Date(m.created_at).toLocaleTimeString("id-ID", {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+        }));
+        onMessagesUpdate(mapped);
+      } catch {
+        // silently ignore polling errors
+      }
+    }
+
+    void fetchMessages();
+    pollRef.current = setInterval(() => void fetchMessages(), 3000);
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showChat, isLegacyOrder, bookingId, userId]);
+
+  // ── Auto-scroll ────────────────────────────────────────────────────────────
+  const messages: ChatMessage[] = order.chatMessages ?? [];
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages.length]);
 
   if (!showChat) return null;
 
-  // Merge API messages + local messages (dedup by text+time)
-  const apiMessages: ChatMessage[] = order.chatMessages ?? [];
-  const merged: ChatMessage[] = [...apiMessages];
-  localMessages.forEach((lm) => {
-    const exists = apiMessages.some(
-      (am) => am.text === lm.text && am.sender === lm.sender,
-    );
-    if (!exists) merged.push(lm);
-  });
-  merged.sort((a, b) => Number(a.id) - Number(b.id));
-
-  // Auto-scroll
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [merged.length, isTyping]);
-
+  // ── Send ───────────────────────────────────────────────────────────────────
   const handleSend = async () => {
     const text = message.trim();
     if (!text || isSending) return;
+
     setMessage("");
     setIsSending(true);
-
-    // Optimistic local message
-    const now = new Date();
-    const timeLabel = now.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
-    const tempMsg: ChatMessage = { id: Date.now(), sender: "user", text, time: timeLabel };
-    setLocalMessages((prev) => [...prev, tempMsg]);
 
     try {
       await onSendMessage(text);
     } catch {
-      // noop — optimistic message already shown
+      // noop
     } finally {
       setIsSending(false);
-    }
-
-    // Mock provider reply for legacy / curhat pending orders
-    if (isLegacyOrder || order.status === "pending") {
-      setIsTyping(true);
-      await new Promise((r) => setTimeout(r, 1200 + Math.random() * 1000));
-      setIsTyping(false);
-      const replyTime = new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
-      setLocalMessages((prev) => [
-        ...prev,
-        { id: Date.now() + 1, sender: "provider", text: getRandomReply(), time: replyTime },
-      ]);
+      // Return focus to input field after every send
+      requestAnimationFrame(() => inputRef.current?.focus());
     }
   };
 
@@ -297,12 +474,12 @@ function LiveChat({
 
       {/* Messages */}
       <div className="flex-1 space-y-3 max-h-[340px] overflow-y-auto p-5 scroll-smooth">
-        {merged.length === 0 && (
+        {messages.length === 0 && (
           <div className="text-center py-8">
             <p className="text-[#94A3B8] text-sm">Mulai percakapan dengan provider 👋</p>
           </div>
         )}
-        {merged.map((msg) => (
+        {messages.map((msg) => (
           <div
             key={msg.id}
             className={cn(
@@ -335,21 +512,6 @@ function LiveChat({
             </div>
           </div>
         ))}
-
-        {/* Typing indicator */}
-        {isTyping && (
-          <div className="flex justify-start">
-            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-[#E91E8C] to-[#7C3AED] flex items-center justify-center text-white text-[10px] font-bold mr-2 flex-shrink-0 self-end">
-              {order.initials.slice(0, 2)}
-            </div>
-            <div className="bg-[#F8F9FA] border border-gray-100 rounded-2xl rounded-bl-sm px-4 py-3 flex items-center gap-1">
-              <span className="w-1.5 h-1.5 bg-[#94A3B8] rounded-full animate-bounce [animation-delay:0ms]" />
-              <span className="w-1.5 h-1.5 bg-[#94A3B8] rounded-full animate-bounce [animation-delay:150ms]" />
-              <span className="w-1.5 h-1.5 bg-[#94A3B8] rounded-full animate-bounce [animation-delay:300ms]" />
-            </div>
-          </div>
-        )}
-
         <div ref={chatEndRef} />
       </div>
 
@@ -392,6 +554,7 @@ function DetailActions({
   onConfirmComplete: (id: string | number) => void;
 }) {
   const navigate = useNavigate();
+  const [showSos, setShowSos] = useState(false);
 
   const handleConfirm = () => {
     onConfirmComplete(order.id);
@@ -401,6 +564,12 @@ function DetailActions({
   if (order.status === "berlangsung") {
     return (
       <div className="space-y-3">
+        {showSos && (
+          <SosModal
+            bookingId={order.id}
+            onClose={() => setShowSos(false)}
+          />
+        )}
         <div className="flex gap-3">
           <button
             type="button"
@@ -412,18 +581,12 @@ function DetailActions({
           </button>
           <button
             type="button"
+            onClick={() => setShowSos(true)}
             className="px-5 bg-[#FEE2E2] hover:bg-[#FECACA] text-[#DC2626] py-3 rounded-xl font-bold text-sm transition-colors border border-[#FECACA]"
           >
             SOS
           </button>
         </div>
-        <button
-          type="button"
-          className="w-full bg-white border border-[#FECACA] hover:bg-[#FEF2F2] text-[#DC2626] py-3 rounded-xl font-medium text-sm transition-colors flex items-center justify-center gap-2"
-        >
-          <X className="w-4 h-4" />
-          Batalkan Pesanan
-        </button>
       </div>
     );
   }
@@ -501,6 +664,7 @@ function StatusTimeline({ order }: { order: Order }) {
 }
 
 export default function DetailPesanan() {
+  usePageTitle("Detail Pesanan | TEMENIN");
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -625,7 +789,12 @@ export default function DetailPesanan() {
       return;
     }
     await sendChatMessage(id, text);
-    await refreshApiOrder();
+    // Polling in LiveChat will pick up new messages automatically
+  }
+
+  function handleMessagesUpdate(msgs: ChatMessage[]) {
+    if (!isApiBooking) return;
+    setApiOrder((prev) => (prev ? { ...prev, chatMessages: msgs } : prev));
   }
 
   if (loading) {
@@ -721,8 +890,13 @@ export default function DetailPesanan() {
           </div>
 
           <div className="max-w-3xl mx-auto space-y-4">
-            <PendingBanner order={order} />
+            <PendingBanner
+              order={order}
+              bookingId={isApiBooking ? id : null}
+              onPaid={() => void refreshApiOrder()}
+            />
             <SessionBanner order={order} />
+            <RejectedBanner order={order} />
 
             {!order.remainingTime && order.status !== "berlangsung" && (
               <div className="flex items-center justify-between bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
@@ -738,12 +912,15 @@ export default function DetailPesanan() {
               </div>
             )}
 
-            <ProviderCard order={order} />
-            <OrderSummary order={order} />
+            <ProviderCard order={order} isProviderView={isProviderView} />
+            <OrderSummary order={order} isProviderView={isProviderView} />
             <EscrowBanner order={order} />
             <LiveChat
               order={order}
+              bookingId={isApiBooking ? (id ?? null) : null}
+              userId={user?.id}
               onSendMessage={handleSendMessage}
+              onMessagesUpdate={handleMessagesUpdate}
             />
             {!isProviderView && (
               <DetailActions

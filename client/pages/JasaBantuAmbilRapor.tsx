@@ -17,12 +17,15 @@ import LocationPickerMap, {
   type PickedLocation,
 } from "@/components/LocationPickerMap";
 import { useAuth } from "@/context/AuthContext";
+import { useLocationAddress } from "@/hooks/useLocationAddress";
 import { formatRupiah } from "@/data/orders";
+import { getBrowserLocation } from "@/lib/geolocation";
 import {
   type AmbilRaporRequest,
   isAmbilRaporRequestComplete,
 } from "@/lib/ambil-rapor-request";
 import { cn } from "@/lib/utils";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 const BASE_PRICE = 50_000;
 const DELIVERY_HOME_EXTRA = 15_000;
@@ -79,6 +82,7 @@ function FormInput({
 }
 
 export default function JasaBantuAmbilRapor() {
+  usePageTitle("Ambil Rapor | TEMENIN");
   const navigate = useNavigate();
   const location = useLocation();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -105,6 +109,8 @@ export default function JasaBantuAmbilRapor() {
   );
   const [isDragging, setIsDragging] = useState(false);
   const [formError, setFormError] = useState("");
+
+  useLocationAddress(pickedLocation, setSchoolAddress);
 
   const totalPrice = useMemo(() => {
     return deliveryMethod === "antar"
@@ -137,7 +143,7 @@ export default function JasaBantuAmbilRapor() {
     setFormError("");
   };
 
-  const handleFindHelper = () => {
+  const handleContinueToPayment = () => {
     const request: AmbilRaporRequest = {
       schoolName: schoolName.trim(),
       studentInfo: studentInfo.trim(),
@@ -152,25 +158,28 @@ export default function JasaBantuAmbilRapor() {
 
     if (!isAmbilRaporRequestComplete(request)) {
       setFormError(
-        "Lengkapi semua field wajib dan upload surat kuasa sebelum mencari helper.",
+        "Lengkapi semua field wajib dan upload surat kuasa sebelum lanjut.",
       );
       return;
     }
 
-    navigate("/jasa-bantu/ambil-rapor/helper", { state: request });
+    navigate("/jasa-bantu/ambil-rapor/pembayaran", {
+      state: {
+        service: "ambil-rapor",
+        request,
+        pickedLocation,
+      },
+    });
   };
 
-  const handleUseMyLocation = () => {
-    if (!("geolocation" in navigator)) return;
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const next = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        setPickedLocation(next);
-        setFormError("");
-      },
-      () => {},
-      { enableHighAccuracy: true, timeout: 8000 },
-    );
+  const handleUseMyLocation = async () => {
+    try {
+      const pos = await getBrowserLocation();
+      setPickedLocation(pos);
+      setFormError("");
+    } catch {
+      setFormError("Gagal mengambil lokasi. Izinkan akses GPS atau pilih di peta.");
+    }
   };
 
   return (
@@ -436,11 +445,11 @@ export default function JasaBantuAmbilRapor() {
 
           <button
             type="button"
-            onClick={handleFindHelper}
+            onClick={handleContinueToPayment}
             className="w-full py-4 rounded-xl border-2 border-[#2C1810] bg-white text-[#2C1810] font-semibold text-base hover:bg-[#F5EBE0] transition-colors flex items-center justify-center gap-2"
           >
             <Search className="w-5 h-5" />
-            Cari Helper Terdekat
+            Lanjut ke Pembayaran
             <ArrowRight className="w-5 h-5" />
           </button>
         </div>

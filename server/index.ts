@@ -29,6 +29,34 @@ import { handleReplyReview } from "./routes/reviews-reply";
 import { handleGetChatHistory } from "./routes/chat-history";
 import { handleSendChatMessage } from "./routes/chat-send";
 import { handleGetUnreadCount } from "./routes/chat-unread";
+import { handleSosReport } from "./routes/sos-report";
+import { handleGetUnreadNotifications, handleListAllNotifications } from "./routes/notifications";
+import { handleTopupBalance, handleGetUserBalance } from "./routes/user-topup";
+import {
+  handleAcceptActivityRequest,
+  handleCreateActivityRequest,
+  handleGetActivityRequest,
+  handleListMyActivityRequests,
+  handleListOpenActivityRequests,
+  handlePayActivityRequest,
+} from "./routes/activity-requests";
+import {
+  handleAdminStats,
+  handleAdminListUsers,
+  handleAdminBanUser,
+  handleAdminUnbanUser,
+  handleAdminPendingVerification,
+  handleAdminVerifyProvider,
+  handleAdminListProviders,
+  handleAdminSuspendProvider,
+  handleAdminActivateProvider,
+  handleAdminListTransactions,
+  handleAdminRefundTransaction,
+  handleAdminListReports,
+  handleAdminLogs,
+  handleAdminCharts,
+} from "./routes/admin";
+import { requireAdmin } from "./middleware/require-admin";
 
 export function createServer() {
   const app = express();
@@ -83,6 +111,41 @@ export function createServer() {
   app.get("/api/chat/:bookingId", requireAuth, handleGetChatHistory);
   app.post("/api/chat/:bookingId/send", requireAuth, handleSendChatMessage);
   app.get("/api/chat/:bookingId/unread", requireAuth, handleGetUnreadCount);
+
+  // SOS / Pelanggaran
+  app.post("/api/sos", requireAuth, handleSosReport);
+
+  // Notifikasi
+  app.get("/api/notifications", requireAuth, handleListAllNotifications);
+  app.get("/api/notifications/unread", requireAuth, handleGetUnreadNotifications);
+
+  // User wallet / topup
+  app.get("/api/user/balance", requireAuth, handleGetUserBalance);
+  app.post("/api/user/topup", requireAuth, handleTopupBalance);
+
+  // Permintaan jasa bantu (broadcast ke semua provider)
+  app.post("/api/activity-requests", requireAuth, handleCreateActivityRequest);
+  app.get("/api/activity-requests/open", requireAuth, handleListOpenActivityRequests);
+  app.get("/api/activity-requests/mine", requireAuth, handleListMyActivityRequests);
+  app.get("/api/activity-requests/:id", requireAuth, handleGetActivityRequest);
+  app.post("/api/activity-requests/:id/pay", requireAuth, handlePayActivityRequest);
+  app.post("/api/activity-requests/:id/accept", requireAuth, handleAcceptActivityRequest);
+
+  // Admin — semua endpoint membutuhkan role admin
+  app.get("/api/admin/stats", requireAdmin, handleAdminStats);
+  app.get("/api/admin/users", requireAdmin, handleAdminListUsers);
+  app.patch("/api/admin/users/:id/ban", requireAdmin, handleAdminBanUser);
+  app.patch("/api/admin/users/:id/unban", requireAdmin, handleAdminUnbanUser);
+  app.get("/api/admin/providers/pending", requireAdmin, handleAdminPendingVerification);
+  app.patch("/api/admin/providers/:id/verify", requireAdmin, handleAdminVerifyProvider);
+  app.get("/api/admin/providers", requireAdmin, handleAdminListProviders);
+  app.patch("/api/admin/providers/:id/suspend", requireAdmin, handleAdminSuspendProvider);
+  app.patch("/api/admin/providers/:id/activate", requireAdmin, handleAdminActivateProvider);
+  app.get("/api/admin/transactions", requireAdmin, handleAdminListTransactions);
+  app.post("/api/admin/transactions/:id/refund", requireAdmin, handleAdminRefundTransaction);
+  app.get("/api/admin/reports", requireAdmin, handleAdminListReports);
+  app.get("/api/admin/logs", requireAdmin, handleAdminLogs);
+  app.get("/api/admin/charts", requireAdmin, handleAdminCharts);
 
   return app;
 }

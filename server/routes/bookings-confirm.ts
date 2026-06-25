@@ -4,6 +4,7 @@ import { isDatabaseConfigured } from "../db/pool";
 import { findUserById } from "../repositories/users";
 import { findProviderByUserId } from "../repositories/providers";
 import { findBookingById, updateBookingStatus } from "../repositories/bookings";
+import { createChatSessionForBooking } from "../repositories/chat";
 
 const confirmSchema = z.object({
   action: z.enum(["accept", "reject"]),
@@ -64,6 +65,13 @@ export const handleConfirmBooking: RequestHandler = async (req, res) => {
 
     if (action === "accept") {
       await updateBookingStatus(booking.id, "confirmed", { confirmed_at: true });
+      // Pastikan chat session ada — trigger DB bisa tidak jalan pada beberapa kondisi
+      await createChatSessionForBooking(
+        booking.id,
+        booking.session_date,
+        booking.session_start,
+        booking.duration_hours,
+      );
     } else {
       await updateBookingStatus(booking.id, "cancelled", {
         cancelled_at: true,

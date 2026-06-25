@@ -10,6 +10,7 @@ import {
   Users,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 const HERO_TAGS = ["Hangout", "Curhat", "Nonton Bareng", "Deep Talk"];
 
@@ -170,6 +171,7 @@ function LandingNavbar() {
 }
 
 export default function Index() {
+  usePageTitle("TEMENIN - Teman Setiamu");
   return (
     <div className="font-['Poppins',sans-serif] bg-[#FFFCF9] overflow-x-hidden">
       <LandingNavbar />

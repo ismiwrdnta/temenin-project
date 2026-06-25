@@ -15,6 +15,8 @@ export interface ProviderProfileRow {
   total_reviews: number;
   total_bookings: number;
   is_available: boolean;
+  suspended_until?: string | null;
+  is_banned?: boolean;
   full_name?: string;
   picture_url?: string | null;
   categories?: ServiceCategory[];
@@ -26,7 +28,7 @@ export async function findProviderByUserId(
 ): Promise<ProviderProfileRow | null> {
   const pool = getPool();
   const result = await pool.query<ProviderProfileRow>(
-    `SELECT pp.*, u.full_name, u.picture_url,
+    `SELECT pp.*, u.full_name, u.picture_url, u.suspended_until, u.is_banned,
             ARRAY_AGG(DISTINCT pc.category) FILTER (WHERE pc.category IS NOT NULL) AS categories
      FROM provider_profiles pp
      JOIN users u ON u.id = pp.user_id
@@ -43,7 +45,7 @@ export async function findProviderById(
 ): Promise<ProviderProfileRow | null> {
   const pool = getPool();
   const result = await pool.query<ProviderProfileRow>(
-    `SELECT pp.*, u.full_name, u.picture_url,
+    `SELECT pp.*, u.full_name, u.picture_url, u.suspended_until, u.is_banned,
             ARRAY_AGG(DISTINCT pc.category) FILTER (WHERE pc.category IS NOT NULL) AS categories
      FROM provider_profiles pp
      JOIN users u ON u.id = pp.user_id
@@ -86,6 +88,8 @@ export async function searchProviders(
   const pool = getPool();
   const conditions: string[] = [
     `pp.verification_status = 'verified'`,
+    `(u.suspended_until IS NULL OR u.suspended_until < NOW())`,
+    `u.is_banned = false`,
   ];
   const values: unknown[] = [];
   let idx = 1;
@@ -119,21 +123,21 @@ export async function searchProviders(
   if (params.lat !== undefined && params.lng !== undefined) {
     const latIdx = idx;
     const lngIdx = idx + 1;
-    distanceSelect = `ROUND((6371 * acos(
+    distanceSelect = `ROUND((6371 * acos(LEAST(1.0, GREATEST(-1.0,
       cos(radians($${latIdx})) * cos(radians(pp.latitude)) *
       cos(radians(pp.longitude) - radians($${lngIdx})) +
       sin(radians($${latIdx})) * sin(radians(pp.latitude))
-    ))::numeric, 2) AS distance_km`;
+    ))))::numeric, 2) AS distance_km`;
 
     values.push(params.lat, params.lng);
     idx += 2;
 
     if (params.radiusKm !== undefined) {
-      havingClause = `HAVING (6371 * acos(
+      havingClause = `HAVING (6371 * acos(LEAST(1.0, GREATEST(-1.0,
         cos(radians($${latIdx})) * cos(radians(pp.latitude)) *
         cos(radians(pp.longitude) - radians($${lngIdx})) +
         sin(radians($${latIdx})) * sin(radians(pp.latitude))
-      )) <= $${idx}`;
+      )))) <= $${idx}`;
       values.push(params.radiusKm);
       idx++;
     }
@@ -170,6 +174,7 @@ export async function updateProviderProfile(
     longitude: number;
     area_description: string;
     is_available: boolean;
+    verification_status: "pending" | "verified" | "rejected";
   }>,
 ): Promise<ProviderProfileRow | null> {
   const pool = getPool();
@@ -182,8 +187,9 @@ export async function updateProviderProfile(
        longitude = COALESCE($5, longitude),
        area_description = COALESCE($6, area_description),
        is_available = COALESCE($7, is_available),
+       verification_status = COALESCE($8, verification_status),
        updated_at = NOW()
-     WHERE user_id = $8
+     WHERE user_id = $9
      RETURNING *`,
     [
       fields.bio ?? null,
@@ -193,6 +199,7 @@ export async function updateProviderProfile(
       fields.longitude ?? null,
       fields.area_description ?? null,
       fields.is_available ?? null,
+      fields.verification_status ?? null,
       userId,
     ],
   );

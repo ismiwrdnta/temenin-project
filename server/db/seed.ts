@@ -86,6 +86,21 @@ async function seed() {
       });
     }
 
+    // Akun test pengguna untuk user testing
+    const testUserEmail = "test@temenin.id";
+    const existingTestUser = await findUserByEmail(testUserEmail);
+    if (!existingTestUser) {
+      console.log(`Membuat akun test pengguna: ${testUserEmail}`);
+      await createUser({
+        email: testUserEmail,
+        fullName: "User Test",
+        phone: "08999888777",
+        role: "pengguna",
+        passwordHash: pwHash,
+        emailVerified: true,
+      });
+    }
+
     for (const p of PROVIDERS_TO_SEED) {
       let user = await findUserByEmail(p.email);
       if (!user) {
@@ -106,17 +121,17 @@ async function seed() {
         console.log(`Membuat profil penyedia untuk: ${p.name}`);
         // Database trigger trg_create_provider_wallet otomatis membuat wallet
         const res = await pool.query(
-          `INSERT INTO provider_profiles (user_id, hourly_rate, verification_status, latitude, longitude, area_description, avg_rating, total_reviews)
-           VALUES ($1, $2, 'verified', $3, $4, 'Bandung, Jawa Barat', $5, $6)
+          `INSERT INTO provider_profiles (user_id, hourly_rate, verification_status, is_available, latitude, longitude, area_description, avg_rating, total_reviews)
+           VALUES ($1, $2, 'verified', true, $3, $4, 'Bandung, Jawa Barat', $5, $6)
            RETURNING *`,
           [userId, p.rate, p.lat, p.lng, p.rating, p.reviews]
         );
         provider = res.rows[0];
       } else {
-        // Update detail rating, lokasi, dan harga
+        // Update detail rating, lokasi, harga, dan set available
         await pool.query(
           `UPDATE provider_profiles
-           SET hourly_rate = $1, verification_status = 'verified', latitude = $2, longitude = $3, area_description = 'Bandung, Jawa Barat', avg_rating = $4, total_reviews = $5
+           SET hourly_rate = $1, verification_status = 'verified', is_available = true, latitude = $2, longitude = $3, area_description = 'Bandung, Jawa Barat', avg_rating = $4, total_reviews = $5
            WHERE user_id = $6`,
           [p.rate, p.lat, p.lng, p.rating, p.reviews, userId]
         );
