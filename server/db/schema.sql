@@ -356,3 +356,20 @@ CREATE TABLE IF NOT EXISTS notifications (
 
 CREATE INDEX IF NOT EXISTS idx_notifications_user
   ON notifications(user_id, is_read, created_at DESC);
+
+-- ============================================================
+-- Migration: 008_admin_logs.sql
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS admin_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  admin_id UUID NOT NULL REFERENCES users(id),
+  action VARCHAR(150) NOT NULL,
+  target_type VARCHAR(50),
+  target_id UUID,
+  details TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_admin_logs_created
+  ON admin_logs(admin_id, created_at DESC);

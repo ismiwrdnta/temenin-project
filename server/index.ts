@@ -40,6 +40,23 @@ import {
   handleListOpenActivityRequests,
   handlePayActivityRequest,
 } from "./routes/activity-requests";
+import {
+  handleAdminStats,
+  handleAdminListUsers,
+  handleAdminBanUser,
+  handleAdminUnbanUser,
+  handleAdminPendingVerification,
+  handleAdminVerifyProvider,
+  handleAdminListProviders,
+  handleAdminSuspendProvider,
+  handleAdminActivateProvider,
+  handleAdminListTransactions,
+  handleAdminRefundTransaction,
+  handleAdminListReports,
+  handleAdminLogs,
+  handleAdminCharts,
+} from "./routes/admin";
+import { requireAdmin } from "./middleware/require-admin";
 
 export function createServer() {
   const app = express();
@@ -113,6 +130,22 @@ export function createServer() {
   app.get("/api/activity-requests/:id", requireAuth, handleGetActivityRequest);
   app.post("/api/activity-requests/:id/pay", requireAuth, handlePayActivityRequest);
   app.post("/api/activity-requests/:id/accept", requireAuth, handleAcceptActivityRequest);
+
+  // Admin — semua endpoint membutuhkan role admin
+  app.get("/api/admin/stats", requireAdmin, handleAdminStats);
+  app.get("/api/admin/users", requireAdmin, handleAdminListUsers);
+  app.patch("/api/admin/users/:id/ban", requireAdmin, handleAdminBanUser);
+  app.patch("/api/admin/users/:id/unban", requireAdmin, handleAdminUnbanUser);
+  app.get("/api/admin/providers/pending", requireAdmin, handleAdminPendingVerification);
+  app.patch("/api/admin/providers/:id/verify", requireAdmin, handleAdminVerifyProvider);
+  app.get("/api/admin/providers", requireAdmin, handleAdminListProviders);
+  app.patch("/api/admin/providers/:id/suspend", requireAdmin, handleAdminSuspendProvider);
+  app.patch("/api/admin/providers/:id/activate", requireAdmin, handleAdminActivateProvider);
+  app.get("/api/admin/transactions", requireAdmin, handleAdminListTransactions);
+  app.post("/api/admin/transactions/:id/refund", requireAdmin, handleAdminRefundTransaction);
+  app.get("/api/admin/reports", requireAdmin, handleAdminListReports);
+  app.get("/api/admin/logs", requireAdmin, handleAdminLogs);
+  app.get("/api/admin/charts", requireAdmin, handleAdminCharts);
 
   return app;
 }
