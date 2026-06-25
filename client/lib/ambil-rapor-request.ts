@@ -14,7 +14,8 @@ export type AmbilRaporRequest = {
 export type AmbilRaporCheckout = {
   service: "ambil-rapor";
   request: AmbilRaporRequest;
-  helperId: number;
+  helperId?: number;
+  pickedLocation?: { lat: number; lng: number } | null;
 };
 
 export function formatAmbilRaporSchedule(request: AmbilRaporRequest): string {

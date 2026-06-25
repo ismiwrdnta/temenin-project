@@ -123,6 +123,8 @@ export interface BookingRecord {
   avg_rating?: number;
   total_reviews?: number;
   provider_user_id?: string;
+  cancel_reason?: string | null;
+  service_category_raw?: string;
 }
 
 export interface CreateBookingRequest {
@@ -143,4 +145,39 @@ export interface CreateReviewRequest {
   booking_id: string;
   rating: number;
   comment: string;
+}
+
+export type ActivityRequestType =
+  | "belanja_titip"
+  | "antri_mewakili"
+  | "ambil_rapor";
+
+export type ActivityRequestStatus = "open" | "claimed" | "cancelled" | "expired";
+
+export interface ActivityRequestRecord {
+  id: string;
+  user_id: string;
+  request_type: ActivityRequestType;
+  status: ActivityRequestStatus;
+  payment_status: "pending" | "paid";
+  latitude?: string | number | null;
+  longitude?: string | number | null;
+  address?: string | null;
+  payload: Record<string, unknown>;
+  total_price: string;
+  claimed_by_provider_id?: string | null;
+  booking_id?: string | null;
+  expires_at?: string | null;
+  created_at: string;
+  user_name?: string;
+  user_phone?: string | null;
+}
+
+export interface CreateActivityRequestBody {
+  request_type: ActivityRequestType;
+  latitude?: number;
+  longitude?: number;
+  address?: string;
+  payload: Record<string, unknown>;
+  total_price: number;
 }

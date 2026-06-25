@@ -8,7 +8,7 @@ import { createReview, findReviewByBookingId } from "../repositories/reviews";
 const createReviewSchema = z.object({
   booking_id: z.string().uuid(),
   rating: z.number().int().min(1).max(5),
-  comment: z.string().min(10).max(1000),
+  comment: z.string().max(1000).optional().default(""),
 });
 
 export const handleCreateReview: RequestHandler = async (req, res) => {
@@ -26,7 +26,7 @@ export const handleCreateReview: RequestHandler = async (req, res) => {
   const parsed = createReviewSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({
-      error: "Data ulasan tidak valid. Komentar minimal 10 karakter, rating 1-5.",
+      error: "Data ulasan tidak valid. Rating harus antara 1-5.",
     });
     return;
   }

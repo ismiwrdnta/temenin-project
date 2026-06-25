@@ -16,6 +16,7 @@ import { useMapLocation } from "@/hooks/useMapLocation";
 import { searchProviders } from "@/lib/bookingApi";
 import { mapApiProviderToMapProvider } from "@/lib/provider-map";
 import { cn } from "@/lib/utils";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Category = "semua" | "temenin" | "curhat" | "bantu";
@@ -43,12 +44,7 @@ function parsePrice(priceStr: string): number {
 }
 
 function getProviderLink(provider: MapProvider): string {
-  const tags = provider.tags.map((t) => t.toLowerCase());
-  if (tags.some((t) => t.includes("temenin") || t.includes("temani")))
-    return `/jasa-temenin/pesan/tatap-muka/${provider.id}`;
-  if (tags.some((t) => t.includes("curhat") || t.includes("dengerin")))
-    return `/jasa-curhat/pesan/reguler/${provider.id}`;
-  return `/jasa-temenin/pesan/tatap-muka/${provider.id}`;
+  return `/provider/${provider.id}/pilih-layanan`;
 }
 
 function getServiceBadge(provider: MapProvider) {
@@ -169,6 +165,7 @@ function ProviderSkeleton() {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function Pencarian() {
+  usePageTitle("Pencarian | TEMENIN");
   const { userLocation, loading: loadingLocation } = useMapLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState<Category>("semua");

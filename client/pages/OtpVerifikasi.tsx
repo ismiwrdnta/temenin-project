@@ -3,11 +3,13 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { sendOtp, verifyOtp } from "@/lib/authApi";
 import { maskEmail } from "@/lib/email";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 const OTP_LENGTH = 6;
 const RESEND_SECONDS = 165;
 
 export default function OtpVerifikasi() {
+  usePageTitle("Verifikasi OTP | TEMENIN");
   const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(""));
   const [countdown, setCountdown] = useState(RESEND_SECONDS);
   const [serverError, setServerError] = useState<string | null>(null);

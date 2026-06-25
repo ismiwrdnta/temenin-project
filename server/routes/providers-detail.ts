@@ -16,6 +16,10 @@ export const handleGetProviderDetail: RequestHandler = async (req, res) => {
       res.status(404).json({ error: "Provider tidak ditemukan." });
       return;
     }
+    if (provider.is_banned || (provider.suspended_until && new Date(provider.suspended_until) > new Date())) {
+      res.status(404).json({ error: "Provider tidak ditemukan." });
+      return;
+    }
 
     res.json({ data: provider });
   } catch (error) {

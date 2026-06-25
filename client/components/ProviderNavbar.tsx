@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
-import { LogOut, Wallet } from "lucide-react";
+import { Bell, LogOut, Wallet } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
 
@@ -63,6 +63,15 @@ export default function ProviderNavbar({
         >
           <Wallet className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">Wallet</span>
+        </Link>
+
+        {/* Notifikasi */}
+        <Link
+          to="/notifikasi"
+          className="w-9 h-9 rounded-full flex items-center justify-center text-[#94A3B8] hover:text-[#E91E8C] hover:bg-[#FDF4FF] transition-colors border border-[#FBCFE8] bg-white"
+          title="Notifikasi"
+        >
+          <Bell className="w-4 h-4" />
         </Link>
 
         {/* Avatar / Profil */}

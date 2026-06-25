@@ -14,6 +14,7 @@ import {
   simulatePayment,
 } from "@/lib/bookingApi";
 import { cn } from "@/lib/utils";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 function isValidMode(mode: string | undefined): mode is TemeninMode {
   return mode === "tatap-muka" || mode === "online";
@@ -247,6 +248,7 @@ function PaymentModal({
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function JasaTemeninPesan() {
+  usePageTitle("Pesan Temenin | TEMENIN");
   const { mode, companionId: providerId } = useParams<{
     mode: string;
     companionId: string;
@@ -254,6 +256,7 @@ export default function JasaTemeninPesan() {
   const navigate = useNavigate();
   const { user, isAuthenticated, isLoading } = useAuth();
   const [durationHours, setDurationHours] = useState(2);
+  const [meetingAddress, setMeetingAddress] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const [provider, setProvider] = useState<Awaited<
@@ -320,16 +323,24 @@ export default function JasaTemeninPesan() {
 
   // Step 1: buat booking, tampilkan modal QR
   async function handleOpenPayment() {
+    if (bookingMode === "tatap-muka" && !meetingAddress.trim()) {
+      setServerError("Masukkan alamat tempat bertemu terlebih dahulu.");
+      return;
+    }
     setServerError(null);
     setIsSubmitting(true);
     try {
+      const notesParts = [`Mode: ${getModeLabel(bookingMode)}`];
+      if (bookingMode === "tatap-muka" && meetingAddress.trim()) {
+        notesParts.push(`Alamat bertemu: ${meetingAddress.trim()}`);
+      }
       const booking = await createBooking({
         provider_id: providerId!,
         service_category: "temenin",
         session_date: todayIsoDate(),
         session_start: nextHourStart(),
         duration_hours: durationHours,
-        notes: `Mode: ${getModeLabel(bookingMode)}`,
+        notes: notesParts.join(" | "),
       });
       setPendingBookingId(booking.id);
       setShowModal(true);
@@ -445,6 +456,22 @@ export default function JasaTemeninPesan() {
               </div>
             </div>
 
+            {/* Alamat bertemu — hanya untuk tatap-muka */}
+            {bookingMode === "tatap-muka" && (
+              <div>
+                <p className="text-[#2C1810] font-semibold text-sm mb-2">
+                  Alamat Bertemu <span className="text-[#E91E8C]">*</span>
+                </p>
+                <textarea
+                  value={meetingAddress}
+                  onChange={(e) => setMeetingAddress(e.target.value)}
+                  placeholder="Contoh: Cafe Kopi Jl. Sudirman No. 10, Bandung"
+                  rows={2}
+                  className="w-full rounded-xl border border-[#E5D5C5] bg-[#FFFCF9] px-4 py-3 text-sm text-[#2C1810] placeholder:text-[#D1D5DB] outline-none focus:border-[#E91E8C] transition-colors resize-none"
+                />
+              </div>
+            )}
+
             <div className="border-t border-dashed border-[#E9D5FF] pt-4 space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-[#94A3B8]">Layanan</span>
@@ -464,6 +491,12 @@ export default function JasaTemeninPesan() {
                   {durationHours} jam
                 </span>
               </div>
+              {bookingMode === "tatap-muka" && meetingAddress.trim() && (
+                <div className="flex justify-between">
+                  <span className="text-[#94A3B8]">Lokasi bertemu</span>
+                  <span className="text-[#2C1810] font-medium text-right max-w-[60%]">{meetingAddress.trim()}</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-[#94A3B8]">Metode bayar</span>
                 <span className="flex items-center gap-1 text-[#2C1810] font-medium">

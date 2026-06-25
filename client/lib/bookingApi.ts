@@ -197,6 +197,27 @@ export function isUuid(value: string): boolean {
   );
 }
 
+export type SosResult = {
+  action: "warning" | "suspension" | "permanent_ban";
+  violation_count: number;
+  suspended_until: string | null;
+  message: string;
+};
+
+export async function reportSos(
+  bookingId: string,
+  reason?: string,
+): Promise<SosResult> {
+  const res = await fetch("/api/sos", {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ booking_id: bookingId, reason }),
+  });
+  if (!res.ok) throw new Error(await parseError(res));
+  const data = (await res.json()) as { data: SosResult };
+  return data.data;
+}
+
 export function mapBookingStatus(status: BookingStatus):
   | "pending"
   | "berlangsung"
@@ -215,12 +236,18 @@ export function mapBookingStatus(status: BookingStatus):
   }
 }
 
+function parseSessionTime(start: string): string {
+  const match = start.match(/(\d{1,2}):(\d{2})/);
+  if (!match) return "00:00";
+  return `${match[1].padStart(2, "0")}:${match[2]}`;
+}
+
 export function formatSessionDate(date?: string | null, start?: string | null): string {
   if (!date || !start) return "Tanggal belum ditentukan";
-  // Normalise time to HH:MM to avoid browser quirks
-  const normalizedStart = start.length >= 5 ? start.slice(0, 5) : start;
-  const d = new Date(`${date}T${normalizedStart}:00`);
-  if (isNaN(d.getTime())) return "Tanggal tidak valid";
+  const datePart = date.length >= 10 ? date.slice(0, 10) : date;
+  const normalizedStart = parseSessionTime(String(start));
+  const d = new Date(`${datePart}T${normalizedStart}:00`);
+  if (Number.isNaN(d.getTime())) return "Tanggal belum ditentukan";
   return d.toLocaleDateString("id-ID", {
     weekday: "long",
     day: "numeric",
@@ -330,6 +357,8 @@ export function mapBookingToOrder(booking: BookingRecord): Order {
   const status = mapBookingStatus(booking.status);
   const providerName = booking.provider_name ?? "Provider";
   const price = parseFloat(booking.total_price);
+  const platformFee = parseFloat(booking.platform_fee ?? "0");
+  const providerEarnings = price - platformFee;
   const hourlyRate = price / Math.max(booking.duration_hours, 1);
   const datetime = formatSessionDate(
     booking.session_date,
@@ -345,11 +374,14 @@ export function mapBookingToOrder(booking: BookingRecord): Order {
     userInitials: getInitials(booking.user_name ?? "P"),
     userLocation: "-",
     service: categoryLabel(booking.service_category),
+    serviceCategory: booking.service_category,
     duration: `${booking.duration_hours} Jam`,
     datetime,
     datetimeRange: datetime,
     status,
     price,
+    providerEarnings,
+    cancelReason: booking.cancel_reason ?? null,
     reviewStatus: booking.has_review
       ? "sent"
       : status === "selesai"

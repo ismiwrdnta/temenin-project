@@ -16,6 +16,7 @@ import {
   type ProviderSearchResult,
 } from "@/lib/bookingApi";
 import { cn } from "@/lib/utils";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 function isValidMode(mode: string | undefined): mode is TemeninMode {
   return mode === "tatap-muka" || mode === "online";
@@ -107,6 +108,7 @@ function ProviderCard({
 }
 
 export default function JasaTemeninCari() {
+  usePageTitle("Cari Teman | TEMENIN");
   const navigate = useNavigate();
   const { mode } = useParams<{ mode: string }>();
   const { user, isAuthenticated, isLoading } = useAuth();

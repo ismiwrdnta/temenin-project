@@ -196,8 +196,8 @@ export async function createWithdrawalRequest(input: {
   const pool = getPool();
   const result = await pool.query<{ id: string }>(
     `INSERT INTO withdrawal_requests
-       (wallet_id, amount, bank_name, account_number, account_name)
-     VALUES ($1, $2, $3, $4, $5)
+       (wallet_id, amount, bank_name, account_number, account_name, status, processed_at)
+     VALUES ($1, $2, $3, $4, $5, 'processed', NOW())
      RETURNING id`,
     [
       input.walletId,

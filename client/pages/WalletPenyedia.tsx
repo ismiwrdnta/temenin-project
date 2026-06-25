@@ -14,6 +14,7 @@ import { useAuth } from "@/context/AuthContext";
 import { formatRupiah } from "@/data/orders";
 import { getStoredToken } from "@/lib/authApi";
 import { cn } from "@/lib/utils";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface WalletData {
@@ -217,6 +218,7 @@ const BANKS = [
 ];
 
 export default function WalletPenyedia() {
+  usePageTitle("Wallet | TEMENIN");
   const navigate = useNavigate();
   const { user, isAuthenticated, isLoading } = useAuth();
 
@@ -229,11 +231,18 @@ export default function WalletPenyedia() {
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   // Withdraw form
+  const SAVED_ACCOUNT_KEY = "temenin_saved_account";
   const [showForm, setShowForm] = useState(false);
   const [wAmount, setWAmount] = useState("");
-  const [wBank, setWBank] = useState(BANKS[0]);
-  const [wAccount, setWAccount] = useState("");
-  const [wName, setWName] = useState("");
+  const [wBank, setWBank] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(SAVED_ACCOUNT_KEY) ?? "{}").bank ?? BANKS[0]; } catch { return BANKS[0]; }
+  });
+  const [wAccount, setWAccount] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(SAVED_ACCOUNT_KEY) ?? "{}").account ?? ""; } catch { return ""; }
+  });
+  const [wName, setWName] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(SAVED_ACCOUNT_KEY) ?? "{}").name ?? ""; } catch { return ""; }
+  });
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState(false);
@@ -302,10 +311,9 @@ export default function WalletPenyedia() {
         account_number: wAccount.trim(),
         account_name: wName.trim(),
       });
+      localStorage.setItem(SAVED_ACCOUNT_KEY, JSON.stringify({ bank: wBank, account: wAccount.trim(), name: wName.trim() }));
       setSubmitSuccess(true);
       setWAmount("");
-      setWAccount("");
-      setWName("");
       await load();
       setTimeout(() => {
         setSubmitSuccess(false);
@@ -485,9 +493,18 @@ export default function WalletPenyedia() {
                     </div>
 
                     <div>
-                      <label className="block text-[#2C1810] font-semibold text-sm mb-2">
-                        Jumlah Penarikan
-                      </label>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="block text-[#2C1810] font-semibold text-sm">
+                          Jumlah Penarikan
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setWAmount(String(Math.floor(balance)))}
+                          className="text-[#E91E8C] text-xs font-semibold hover:underline"
+                        >
+                          Tarik Semua
+                        </button>
+                      </div>
                       <div className="relative">
                         <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[#94A3B8] text-sm font-medium">
                           Rp
@@ -528,9 +545,12 @@ export default function WalletPenyedia() {
                     </div>
 
                     <div>
-                      <label className="block text-[#2C1810] font-semibold text-sm mb-2">
-                        Nomor Rekening / Akun
-                      </label>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="block text-[#2C1810] font-semibold text-sm">
+                          Nomor Rekening / Akun
+                        </label>
+                        {(() => { try { const s = JSON.parse(localStorage.getItem(SAVED_ACCOUNT_KEY) ?? "{}"); return s.account ? <span className="text-[#16A34A] text-xs font-medium">✓ Tersimpan</span> : null; } catch { return null; } })()}
+                      </div>
                       <input
                         type="text"
                         inputMode="numeric"

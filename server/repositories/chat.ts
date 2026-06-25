@@ -102,6 +102,62 @@ export async function markMessagesAsRead(
   );
 }
 
+export async function ensureChatSession(
+  bookingId: string,
+  userId: string,
+): Promise<ChatSessionRow | null> {
+  const pool = getPool();
+
+  const bookingResult = await pool.query<{
+    session_date: string;
+    session_start: string;
+    duration_hours: number;
+  }>(
+    `SELECT b.session_date, b.session_start, b.duration_hours
+     FROM bookings b
+     JOIN provider_profiles pp ON pp.id = b.provider_id
+     WHERE b.id = $1
+       AND (b.user_id = $2 OR pp.user_id = $2)
+       AND b.status IN ('confirmed', 'in_progress', 'completed')`,
+    [bookingId, userId],
+  );
+
+  if (bookingResult.rows.length === 0) return null;
+
+  const booking = bookingResult.rows[0];
+
+  await pool.query(
+    `INSERT INTO chat_sessions (booking_id, expires_at)
+     VALUES ($1, ($2::date + $3::time + ($4 || ' hours')::INTERVAL + INTERVAL '30 days'))
+     ON CONFLICT (booking_id) DO NOTHING`,
+    [bookingId, booking.session_date, booking.session_start, booking.duration_hours],
+  );
+
+  const result = await pool.query<ChatSessionRow>(
+    `SELECT cs.* FROM chat_sessions cs
+     JOIN bookings b ON b.id = cs.booking_id
+     JOIN provider_profiles pp ON pp.id = b.provider_id
+     WHERE cs.booking_id = $1 AND (b.user_id = $2 OR pp.user_id = $2)`,
+    [bookingId, userId],
+  );
+  return result.rows[0] ?? null;
+}
+
+export async function createChatSessionForBooking(
+  bookingId: string,
+  sessionDate: string,
+  sessionStart: string,
+  durationHours: number,
+): Promise<void> {
+  const pool = getPool();
+  await pool.query(
+    `INSERT INTO chat_sessions (booking_id, expires_at)
+     VALUES ($1, ($2::date + $3::time + ($4 || ' hours')::INTERVAL + INTERVAL '30 days'))
+     ON CONFLICT (booking_id) DO NOTHING`,
+    [bookingId, sessionDate, sessionStart, durationHours],
+  );
+}
+
 export async function countUnread(
   bookingId: string,
   userId: string,

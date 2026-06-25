@@ -2,7 +2,7 @@ import type { RequestHandler } from "express";
 import { z } from "zod";
 import { isDatabaseConfigured } from "../db/pool";
 import {
-  findChatSessionByBookingForUser,
+  ensureChatSession,
   findMessages,
   markMessagesAsRead,
 } from "../repositories/chat";
@@ -33,7 +33,7 @@ export const handleGetChatHistory: RequestHandler = async (req, res) => {
   const bookingId = req.params.bookingId as string;
 
   try {
-    const session = await findChatSessionByBookingForUser(bookingId, userId);
+    const session = await ensureChatSession(bookingId, userId);
     if (!session) {
       res.status(404).json({ error: "Sesi chat tidak ditemukan." });
       return;

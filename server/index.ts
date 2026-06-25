@@ -29,6 +29,17 @@ import { handleReplyReview } from "./routes/reviews-reply";
 import { handleGetChatHistory } from "./routes/chat-history";
 import { handleSendChatMessage } from "./routes/chat-send";
 import { handleGetUnreadCount } from "./routes/chat-unread";
+import { handleSosReport } from "./routes/sos-report";
+import { handleGetUnreadNotifications, handleListAllNotifications } from "./routes/notifications";
+import { handleTopupBalance, handleGetUserBalance } from "./routes/user-topup";
+import {
+  handleAcceptActivityRequest,
+  handleCreateActivityRequest,
+  handleGetActivityRequest,
+  handleListMyActivityRequests,
+  handleListOpenActivityRequests,
+  handlePayActivityRequest,
+} from "./routes/activity-requests";
 
 export function createServer() {
   const app = express();
@@ -83,6 +94,25 @@ export function createServer() {
   app.get("/api/chat/:bookingId", requireAuth, handleGetChatHistory);
   app.post("/api/chat/:bookingId/send", requireAuth, handleSendChatMessage);
   app.get("/api/chat/:bookingId/unread", requireAuth, handleGetUnreadCount);
+
+  // SOS / Pelanggaran
+  app.post("/api/sos", requireAuth, handleSosReport);
+
+  // Notifikasi
+  app.get("/api/notifications", requireAuth, handleListAllNotifications);
+  app.get("/api/notifications/unread", requireAuth, handleGetUnreadNotifications);
+
+  // User wallet / topup
+  app.get("/api/user/balance", requireAuth, handleGetUserBalance);
+  app.post("/api/user/topup", requireAuth, handleTopupBalance);
+
+  // Permintaan jasa bantu (broadcast ke semua provider)
+  app.post("/api/activity-requests", requireAuth, handleCreateActivityRequest);
+  app.get("/api/activity-requests/open", requireAuth, handleListOpenActivityRequests);
+  app.get("/api/activity-requests/mine", requireAuth, handleListMyActivityRequests);
+  app.get("/api/activity-requests/:id", requireAuth, handleGetActivityRequest);
+  app.post("/api/activity-requests/:id/pay", requireAuth, handlePayActivityRequest);
+  app.post("/api/activity-requests/:id/accept", requireAuth, handleAcceptActivityRequest);
 
   return app;
 }

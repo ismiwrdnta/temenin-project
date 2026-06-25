@@ -11,6 +11,7 @@ import {
 import AppNavbar from "@/components/AppNavbar";
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 const SERVICES = [
   {
@@ -144,6 +145,7 @@ function SakuraDecor() {
 }
 
 export default function JasaTemenin() {
+  usePageTitle("Jasa Temenin | TEMENIN");
   const { user, isAuthenticated, isLoading } = useAuth();
 
   if (isLoading) {

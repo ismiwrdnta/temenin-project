@@ -58,7 +58,11 @@ export const handleUpdateProviderProfile: RequestHandler = async (
 
     const { categories, ...profileFields } = parsed.data;
 
-    const updated = await updateProviderProfile(userId, profileFields);
+    const updated = await updateProviderProfile(userId, {
+      ...profileFields,
+      // Auto-verifikasi saat provider melengkapi profil pertama kali
+      ...(provider.verification_status === "pending" ? { verification_status: "verified" } : {}),
+    });
 
     if (categories) {
       await setProviderCategories(provider.id, categories);

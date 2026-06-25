@@ -13,6 +13,7 @@ import {
 } from "@/lib/bookingApi";
 import { cn } from "@/lib/utils";
 import type { CurhatMode } from "./JasaCurhatPilih";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 function isValidMode(mode: string | undefined): mode is CurhatMode {
   return mode === "reguler" || mode === "anonim";
@@ -144,6 +145,7 @@ function PaymentModal({
 }
 
 export default function JasaCurhatPesan() {
+  usePageTitle("Pesan Curhat | TEMENIN");
   const { mode, providerId } = useParams<{
     mode: string;
     providerId: string;

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { getStoredToken } from "@/lib/authApi";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 type ServiceCategory = "temenin" | "curhat" | "bantu_aktivitas";
 
@@ -18,6 +19,10 @@ const INTEREST_OPTIONS = [
   "Seni",
   "Teknologi",
   "Pendidikan",
+  "Film & Hiburan",
+  "Traveling",
+  "Gaming",
+  "Kesehatan",
 ];
 
 const PROVINCE_OPTIONS = [
@@ -43,11 +48,36 @@ const DISTRICT_OPTIONS: Record<string, string[]> = {
   Surabaya: ["Gubeng", "Wonokromo", "Tegalsari"],
 };
 
+function ToggleChip({
+  label,
+  selected,
+  onToggle,
+}: {
+  label: string;
+  selected: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className={`px-4 py-2 rounded-full text-sm font-medium border transition-colors ${
+        selected
+          ? "bg-[#7C3AED] border-[#7C3AED] text-white"
+          : "bg-[#F5EBE0] border-black/20 text-black hover:border-[#7C3AED]"
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
 export default function DaftarProvider() {
+  usePageTitle("Daftar Provider | TEMENIN");
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
-  const [service, setService] = useState<ServiceCategory | "">("");
-  const [interest, setInterest] = useState("");
+  const [services, setServices] = useState<ServiceCategory[]>([]);
+  const [interests, setInterests] = useState<string[]>([]);
   const [province, setProvince] = useState("");
   const [city, setCity] = useState("");
   const [district, setDistrict] = useState("");
@@ -57,14 +87,26 @@ export default function DaftarProvider() {
   const cityOptions = province ? (CITY_OPTIONS[province] ?? []) : [];
   const districtOptions = city ? (DISTRICT_OPTIONS[city] ?? ["Lainnya"]) : [];
 
+  function toggleService(val: ServiceCategory) {
+    setServices((prev) =>
+      prev.includes(val) ? prev.filter((s) => s !== val) : [...prev, val],
+    );
+  }
+
+  function toggleInterest(val: string) {
+    setInterests((prev) =>
+      prev.includes(val) ? prev.filter((i) => i !== val) : [...prev, val],
+    );
+  }
+
   async function handleSubmit() {
     if (!isAuthenticated) {
       navigate("/daftar");
       return;
     }
 
-    if (!service) {
-      setServerError("Pilih jenis jasa yang kamu tawarkan.");
+    if (services.length === 0) {
+      setServerError("Pilih minimal satu jenis jasa yang kamu tawarkan.");
       return;
     }
 
@@ -81,9 +123,9 @@ export default function DaftarProvider() {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
-          categories: [service],
+          categories: services,
           area_description: areaParts.join(", "),
-          bio: interest ? `Minat: ${interest}` : undefined,
+          bio: interests.length > 0 ? `Minat: ${interests.join(", ")}` : undefined,
         }),
       });
 
@@ -128,57 +170,44 @@ export default function DaftarProvider() {
           </div>
         )}
 
-        <div className="w-full flex flex-col gap-5 mb-8">
+        <div className="w-full flex flex-col gap-6 mb-8">
+          {/* Pilihan Jasa — multi-select chips */}
           <div className="w-full">
-            <p className="text-black text-lg md:text-2xl font-normal mb-3">Pilihan Jasa</p>
-            <div className="relative w-full">
-              <select
-                value={service}
-                onChange={(e) => setService(e.target.value as ServiceCategory | "")}
-                className="w-full appearance-none bg-[#F5EBE0] border border-black rounded-xl px-5 py-4 md:py-5 text-black text-base md:text-lg outline-none focus:border-[#7C3AED] transition-colors cursor-pointer"
-              >
-                <option value="" disabled>
-                  Pilih Jasa
-                </option>
-                {SERVICE_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-              <div className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2">
-                <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M14 18L6 10h16L14 18z" fill="#7C3AED"/>
-                </svg>
-              </div>
+            <p className="text-black text-lg md:text-2xl font-normal mb-3">
+              Pilihan Jasa{" "}
+              <span className="text-[#94A3B8] text-sm font-normal">(bisa lebih dari satu)</span>
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {SERVICE_OPTIONS.map((option) => (
+                <ToggleChip
+                  key={option.value}
+                  label={option.label}
+                  selected={services.includes(option.value)}
+                  onToggle={() => toggleService(option.value)}
+                />
+              ))}
             </div>
           </div>
 
+          {/* Preferensi & Minat — multi-select chips */}
           <div className="w-full">
-            <p className="text-black text-lg md:text-2xl font-normal mb-3">Preferensi dan Minat</p>
-            <div className="relative w-full">
-              <select
-                value={interest}
-                onChange={(e) => setInterest(e.target.value)}
-                className="w-full appearance-none bg-[#F5EBE0] border border-black rounded-xl px-5 py-4 md:py-5 text-black text-base md:text-lg outline-none focus:border-[#7C3AED] transition-colors cursor-pointer"
-              >
-                <option value="" disabled>
-                  Pilih Preferensi dan Minat
-                </option>
-                {INTEREST_OPTIONS.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-              <div className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2">
-                <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M14 18L6 10h16L14 18z" fill="#7C3AED"/>
-                </svg>
-              </div>
+            <p className="text-black text-lg md:text-2xl font-normal mb-3">
+              Preferensi dan Minat{" "}
+              <span className="text-[#94A3B8] text-sm font-normal">(bisa lebih dari satu)</span>
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {INTEREST_OPTIONS.map((option) => (
+                <ToggleChip
+                  key={option}
+                  label={option}
+                  selected={interests.includes(option)}
+                  onToggle={() => toggleInterest(option)}
+                />
+              ))}
             </div>
           </div>
 
+          {/* Lokasi */}
           <div className="w-full">
             <p className="text-black text-lg md:text-2xl font-normal mb-3">Lokasi</p>
             <div className="w-full grid grid-cols-3 rounded-xl overflow-hidden border border-black bg-[#F5EBE0]">
@@ -249,7 +278,7 @@ export default function DaftarProvider() {
           <button
             onClick={() => navigate("/daftar")}
             className="py-4 rounded-xl text-white font-semibold text-base md:text-lg hover:opacity-90 transition-opacity"
-            style={{ background: 'linear-gradient(90deg, #E91E8C 0%, #A131CC 100%)' }}
+            style={{ background: "linear-gradient(90deg, #E91E8C 0%, #A131CC 100%)" }}
           >
             Kembali
           </button>
@@ -257,7 +286,7 @@ export default function DaftarProvider() {
             onClick={handleSubmit}
             disabled={isSubmitting}
             className="py-4 rounded-xl text-white font-semibold text-base md:text-lg hover:opacity-90 transition-opacity disabled:opacity-60"
-            style={{ background: 'linear-gradient(90deg, #E91E8C 0%, #A131CC 100%)' }}
+            style={{ background: "linear-gradient(90deg, #E91E8C 0%, #A131CC 100%)" }}
           >
             {isSubmitting ? "Menyimpan..." : "Next"}
           </button>

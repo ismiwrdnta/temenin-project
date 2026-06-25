@@ -27,6 +27,9 @@ ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
 ALTER TABLE users ADD CONSTRAINT users_role_check
   CHECK (role IN ('pengguna', 'penyedia', 'admin'));
 
+-- Kolom saldo pengguna (top-up wallet)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS balance NUMERIC(12,2) NOT NULL DEFAULT 0;
+
 -- ── Provider profiles ───────────────────────────────────────
 CREATE TABLE IF NOT EXISTS provider_profiles (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -190,7 +193,7 @@ CREATE TABLE IF NOT EXISTS reviews (
   reviewer_id UUID NOT NULL REFERENCES users(id),
   reviewee_id UUID NOT NULL REFERENCES users(id),
   rating INT NOT NULL CHECK (rating BETWEEN 1 AND 5),
-  comment TEXT NOT NULL CHECK (LENGTH(comment) >= 10),
+  comment TEXT NOT NULL DEFAULT '',
   provider_reply TEXT,
   replied_at TIMESTAMPTZ,
   is_deleted BOOLEAN NOT NULL DEFAULT false,
@@ -279,4 +282,77 @@ CREATE TABLE IF NOT EXISTS email_otp_codes (
 
 CREATE INDEX IF NOT EXISTS idx_email_otp_user ON email_otp_codes(user_id);
 CREATE INDEX IF NOT EXISTS idx_email_otp_expires ON email_otp_codes(expires_at);
- 
+
+-- ============================================================
+-- Migration: 005_violation_system.sql
+-- ============================================================
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS violation_count INT NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS suspended_until TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_banned BOOLEAN NOT NULL DEFAULT false;
+
+CREATE TABLE IF NOT EXISTS provider_violations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  provider_user_id UUID NOT NULL REFERENCES users(id),
+  booking_id UUID REFERENCES bookings(id),
+  reported_by UUID NOT NULL REFERENCES users(id),
+  reason TEXT,
+  violation_count INT NOT NULL,
+  action_taken VARCHAR(50) NOT NULL
+    CHECK (action_taken IN ('warning', 'suspension', 'permanent_ban')),
+  suspended_until TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_violations_provider ON provider_violations(provider_user_id);
+CREATE INDEX IF NOT EXISTS idx_violations_booking ON provider_violations(booking_id);
+
+-- ============================================================
+-- Migration: 006_activity_requests.sql
+-- Permintaan jasa bantu — broadcast ke semua provider
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS activity_requests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id),
+  request_type VARCHAR(30) NOT NULL
+    CHECK (request_type IN ('belanja_titip', 'antri_mewakili', 'ambil_rapor')),
+  status VARCHAR(20) NOT NULL DEFAULT 'open'
+    CHECK (status IN ('open', 'claimed', 'cancelled', 'expired')),
+  payment_status VARCHAR(20) NOT NULL DEFAULT 'pending'
+    CHECK (payment_status IN ('pending', 'paid')),
+  latitude NUMERIC(10,7),
+  longitude NUMERIC(10,7),
+  address TEXT,
+  payload JSONB NOT NULL DEFAULT '{}',
+  total_price NUMERIC(12,2) NOT NULL,
+  claimed_by_provider_id UUID REFERENCES provider_profiles(id),
+  booking_id UUID REFERENCES bookings(id),
+  expires_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_activity_requests_open
+  ON activity_requests(status, payment_status)
+  WHERE status = 'open' AND payment_status = 'paid';
+
+CREATE INDEX IF NOT EXISTS idx_activity_requests_user
+  ON activity_requests(user_id, created_at DESC);
+
+-- ============================================================
+-- Migration: 007_notifications.sql
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS notifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  type VARCHAR(50) NOT NULL,
+  title VARCHAR(255) NOT NULL,
+  body TEXT NOT NULL,
+  data JSONB DEFAULT '{}',
+  is_read BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user
+  ON notifications(user_id, is_read, created_at DESC);

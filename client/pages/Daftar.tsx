@@ -13,6 +13,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 type Role = "pengguna" | "penyedia";
 
@@ -30,6 +31,7 @@ const registerSchema = z.object({
 type RegisterFormValues = z.infer<typeof registerSchema>;
 
 export default function Daftar() {
+  usePageTitle("Daftar Akun | TEMENIN");
   const [role, setRole] = useState<Role>("pengguna");
   const [serverError, setServerError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);

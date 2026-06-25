@@ -28,6 +28,7 @@ export type Order = {
   datetimeRange: string;
   status: OrderStatus;
   price: number;
+  providerEarnings?: number;
   reviewStatus?: "pending" | "sent";
   reviewRating?: number;
   tags: string[];
@@ -38,6 +39,8 @@ export type Order = {
   paymentMethod: string;
   remainingTime?: string;
   chatMessages?: ChatMessage[];
+  cancelReason?: string | null;
+  serviceCategory?: string;
   statusHistory: StatusHistoryItem[];
 };
 

@@ -4,6 +4,7 @@ import AppNavbar from "@/components/AppNavbar";
 import { useAuth } from "@/context/AuthContext";
 import { BANTU_CATEGORIES, type BantuCategory } from "@/data/jasa-bantu-categories";
 import { cn } from "@/lib/utils";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 function BantuCategoryCard({
   category,
@@ -78,6 +79,7 @@ function BantuCategoryCard({
 }
 
 export default function JasaBantu() {
+  usePageTitle("Jasa Bantu Aktivitas | TEMENIN");
   const navigate = useNavigate();
   const { user, isAuthenticated, isLoading } = useAuth();
 

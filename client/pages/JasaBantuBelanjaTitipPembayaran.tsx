@@ -11,9 +11,13 @@ import {
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import AppNavbar from "@/components/AppNavbar";
 import { useAuth } from "@/context/AuthContext";
-import { useOrders } from "@/context/OrderContext";
 import { formatRupiah } from "@/data/orders";
+import {
+  createActivityRequest,
+  payActivityRequest,
+} from "@/lib/activityRequestApi";
 import { cn } from "@/lib/utils";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 interface ShoppingItem {
@@ -32,6 +36,7 @@ interface BelanjaTitipState {
   notes: string;
   totalPrice: number;
   totalEstimate: number;
+  pickedLocation?: { lat: number; lng: number } | null;
 }
 
 // ─── QR Code SVG ───────────────────────────────────────────────────────────
@@ -242,15 +247,16 @@ function PaymentModal({
 
 // ─── Main Page ──────────────────────────────────────────────────────────────
 export default function JasaBantuBelanjaTitipPembayaran() {
+  usePageTitle("Pembayaran Belanja | TEMENIN");
   const navigate = useNavigate();
   const location = useLocation();
   const { user, isAuthenticated, isLoading } = useAuth();
-  const { createBelanjaTitipOrder } = useOrders();
 
   const state = location.state as BelanjaTitipState | null;
   const qrSeed = useRef(Date.now()).current;
 
   const [showModal, setShowModal] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   if (isLoading) {
     return (
@@ -265,16 +271,28 @@ export default function JasaBantuBelanjaTitipPembayaran() {
   if (!state?.storeName) return <Navigate to="/jasa-bantu/belanja-titip" replace />;
 
   async function handleConfirmPayment() {
-    await new Promise((r) => setTimeout(r, 1500));
-    const order = createBelanjaTitipOrder({
-      storeName: state!.storeName,
-      deliveryAddress: state!.deliveryAddress,
-      items: state!.items,
-      totalPrice: state!.totalPrice,
-      customer: { name: user!.name },
+    setSubmitError(null);
+    await new Promise((r) => setTimeout(r, 800));
+
+    const created = await createActivityRequest({
+      request_type: "belanja_titip",
+      latitude: state!.pickedLocation?.lat,
+      longitude: state!.pickedLocation?.lng,
+      address: state!.deliveryAddress,
+      payload: {
+        storeName: state!.storeName,
+        storeAddress: state!.storeAddress,
+        deliveryAddress: state!.deliveryAddress,
+        items: state!.items,
+        notes: state!.notes,
+        totalEstimate: state!.totalEstimate,
+      },
+      total_price: state!.totalPrice,
     });
-    await new Promise((r) => setTimeout(r, 1800));
-    navigate(`/pesanan/${order.id}`);
+
+    await payActivityRequest(created.id);
+    await new Promise((r) => setTimeout(r, 600));
+    navigate(`/jasa-bantu/permintaan/${created.id}`);
   }
 
   return (
