@@ -6,7 +6,7 @@ export interface DemoResponse {
   message: string;
 }
 
-export type UserRole = "pengguna" | "penyedia";
+export type UserRole = "pengguna" | "penyedia" | "admin";
 
 export interface PublicUser {
   id: string;

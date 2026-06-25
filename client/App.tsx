@@ -35,6 +35,7 @@ import DetailPesanan from "./pages/DetailPesanan";
 import BeriUlasan from "./pages/BeriUlasan";
 import DashboardPenyedia from "./pages/DashboardPenyedia";
 import ProfilPengguna from "./pages/ProfilPengguna";
+import DashboardAdmin from "./pages/DashboardAdmin";
 import ProfilPenyedia from "./pages/ProfilPenyedia";
 import PilihLayananProvider from "./pages/PilihLayananProvider";
 import Notifikasi from "./pages/Notifikasi";
@@ -70,6 +71,7 @@ const App = () => (
           <Route path="/profil" element={<ProfilPengguna />} />
           <Route path="/provider/:providerId/pilih-layanan" element={<PilihLayananProvider />} />
           <Route path="/notifikasi" element={<Notifikasi />} />
+          <Route path="/dashboard-admin" element={<DashboardAdmin />} />
           <Route path="/profil-penyedia" element={<ProfilPenyedia />} />
           <Route path="/wallet-penyedia" element={<WalletPenyedia />} />
           <Route path="/pencarian" element={<Pencarian />} />

@@ -433,7 +433,14 @@ export default function DashboardPenyedia() {
 
   if (isLoading) return null;
   if (!isAuthenticated || !user) return <Navigate to="/masuk" replace />;
-  if (user.role !== "penyedia") return <Navigate to="/dashboard" replace />;
+  if (user.role !== "penyedia") {
+    return (
+      <Navigate
+        to={user.role === "admin" ? "/dashboard-admin" : "/dashboard"}
+        replace
+      />
+    );
+  }
 
   const FILTER_TABS: { key: FilterTab; label: string; icon: React.ReactNode }[] = [
     { key: "semua",      label: "Semua",      icon: <TrendingUp className="w-3.5 h-3.5" /> },

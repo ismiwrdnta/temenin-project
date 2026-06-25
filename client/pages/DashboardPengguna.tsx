@@ -209,6 +209,10 @@ export default function DashboardPengguna() {
     return <Navigate to="/dashboard-penyedia" replace />;
   }
 
+  if (user.role === "admin") {
+    return <Navigate to="/dashboard-admin" replace />;
+  }
+
   const ratingCount = useMemo(
     () => orders.filter((o) => o.status === "selesai" && o.reviewStatus === "sent").length,
     [orders],
