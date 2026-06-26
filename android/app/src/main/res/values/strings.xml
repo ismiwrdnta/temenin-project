@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Temenin</string>
+    <string name="title_activity_main">Temenin</string>
+    <string name="package_name">id.temenin.app</string>
+    <string name="custom_url_scheme">id.temenin.app</string>
+</resources>
