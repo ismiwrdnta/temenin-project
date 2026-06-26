@@ -15,6 +15,9 @@ export type MapProvider = {
   distanceKm: number;
   lat: number;
   lng: number;
+  bio?: string | null;
+  rawCategories?: string[];
+  matchScore?: number;
 };
 
 export type UserMapLocation = {

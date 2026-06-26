@@ -64,51 +64,32 @@ export const handleSosReport: RequestHandler = async (req, res) => {
     }
     const providerUserId = providerResult.rows[0].user_id;
 
-    const updateResult = await pool.query<{ violation_count: number }>(
-      `UPDATE users SET violation_count = violation_count + 1 WHERE id = $1 RETURNING violation_count`,
-      [providerUserId],
-    );
-    const { violation_count } = updateResult.rows[0];
-
-    let actionTaken: string;
-    let suspendedUntil: string | null = null;
-    let actionMessage: string;
-
-    if (violation_count === 1) {
-      actionTaken = "warning";
-      actionMessage = "Provider telah menerima peringatan pertama.";
-      await pool.query(
-        `INSERT INTO notifications (user_id, type, title, body, data) VALUES ($1, 'violation_warning', 'Peringatan Pelanggaran', $2, $3)`,
-        [providerUserId, "Kamu mendapat peringatan pertama karena laporan pelanggaran dari pengguna. Harap patuhi aturan platform Temenin.", JSON.stringify({ booking_id })],
-      );
-    } else if (violation_count === 2) {
-      actionTaken = "suspension";
-      const suspendDate = new Date();
-      suspendDate.setDate(suspendDate.getDate() + 30);
-      suspendedUntil = suspendDate.toISOString();
-      await pool.query(`UPDATE users SET suspended_until = $1 WHERE id = $2`, [suspendedUntil, providerUserId]);
-      actionMessage = "Provider telah diskorsing selama 30 hari.";
-      await pool.query(
-        `INSERT INTO notifications (user_id, type, title, body, data) VALUES ($1, 'violation_suspension', 'Akun Diskorsing', $2, $3)`,
-        [providerUserId, `Akun kamu diskorsing 30 hari akibat pelanggaran kedua.`, JSON.stringify({ booking_id, suspended_until: suspendedUntil })],
-      );
-    } else {
-      actionTaken = "permanent_ban";
-      await pool.query(`UPDATE users SET is_banned = true WHERE id = $1`, [providerUserId]);
-      actionMessage = "Akun provider telah dibekukan secara permanen.";
-      await pool.query(
-        `INSERT INTO notifications (user_id, type, title, body, data) VALUES ($1, 'violation_ban', 'Akun Dibekukan Permanen', $2, $3)`,
-        [providerUserId, "Akun kamu dibekukan permanen akibat pelanggaran berulang.", JSON.stringify({ booking_id })],
-      );
-    }
-
+    // Buat laporan dengan status pending — belum ada tindakan sampai admin approve
     await pool.query(
-      `INSERT INTO provider_violations (provider_user_id, booking_id, reported_by, reason, violation_count, action_taken, suspended_until) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [providerUserId, booking_id, userId, reason, violation_count, actionTaken, suspendedUntil],
+      `INSERT INTO provider_violations
+         (provider_user_id, booking_id, reported_by, reason, violation_count, action_taken, admin_status)
+       VALUES ($1, $2, $3, $4, 0, NULL, 'pending')`,
+      [providerUserId, booking_id, userId, reason],
+    );
+
+    // Notifikasi ke semua admin agar segera mereview
+    await pool.query(
+      `INSERT INTO notifications (user_id, type, title, body, data)
+       SELECT id, 'sos_pending', 'Laporan SOS Baru', $1, $2
+       FROM users WHERE role = 'admin'`,
+      [
+        `Ada laporan SOS baru dari pengguna yang perlu disetujui. Alasan: ${reason}`,
+        JSON.stringify({ booking_id }),
+      ],
     );
 
     res.status(201).json({
-      data: { action: actionTaken, violation_count, suspended_until: suspendedUntil, message: actionMessage },
+      data: {
+        action: "pending",
+        violation_count: 0,
+        suspended_until: null,
+        message: "Laporan SOS kamu sudah diterima dan sedang menunggu review admin.",
+      },
     });
   } catch (error) {
     console.error("SOS report error:", error);

@@ -1218,16 +1218,26 @@ function ManajemenTransaksiView() {
 
 // ── A06 Manajemen Laporan ─────────────────────────────────────
 
-const actionLabel = (a: string) => {
+const actionLabel = (a: string | null) => {
+  if (!a || a === "pending") return "Menunggu Review";
   if (a === "warning") return "Peringatan";
   if (a === "suspension") return "Suspensi";
   if (a === "permanent_ban") return "Ban Permanen";
   return a;
 };
-const actionStyle = (a: string) => {
+const actionStyle = (a: string | null, adminStatus?: string) => {
+  if (!a || a === "pending" || adminStatus === "pending")
+    return "bg-[#EFF6FF] text-[#2563EB] border-[#BFDBFE]";
+  if (adminStatus === "rejected")
+    return "bg-[#F1F5F9] text-[#94A3B8] border-[#E2E8F0]";
   if (a === "warning") return "bg-[#FEF3C7] text-[#D97706] border-[#FDE68A]";
   if (a === "suspension") return "bg-[#FFEDD5] text-[#EA580C] border-[#FED7AA]";
   return "bg-[#FEE2E2] text-[#DC2626] border-[#FECACA]";
+};
+const adminStatusLabel = (s: string) => {
+  if (s === "pending") return "⏳ Menunggu";
+  if (s === "approved") return "✅ Disetujui";
+  return "❌ Ditolak";
 };
 
 function exportLaporanPdf(
@@ -1251,7 +1261,7 @@ function exportLaporanPdf(
           <td>${r.reporter_name}<br/><small>${r.reporter_email}</small></td>
           <td>${r.provider_name}<br/><small>${r.provider_email}</small></td>
           <td>${r.reason ?? "-"}</td>
-          <td>${actionLabel(r.action_taken)}</td>
+          <td>${r.admin_status === "pending" ? "Menunggu Review" : actionLabel(r.action_taken)}</td>
           <td>${new Date(r.created_at).toLocaleDateString("id-ID")}</td>
         </tr>`,
       )
@@ -1346,17 +1356,34 @@ function exportLaporanPdf(
 function ManajemenLaporanView() {
   const [selected, setSelected] = useState<AdminReport | null>(null);
   const [mode, setMode] = useState<"transaksi" | "bulan">("transaksi");
+  const [reviewingId, setReviewingId] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   const { data: reports, isLoading, isError } = useQuery<AdminReport[]>({
     queryKey: ["admin-reports"],
     queryFn: adminApi.getReports,
   });
 
-  // group per bulan
+  const pendingCount = reports?.filter((r) => r.admin_status === "pending").length ?? 0;
+
+  async function handleReview(id: string, action: "approve" | "reject") {
+    setReviewingId(id);
+    try {
+      await adminApi.reviewSos(id, action);
+      await queryClient.invalidateQueries({ queryKey: ["admin-reports"] });
+      setSelected(null);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Gagal memproses review.");
+    } finally {
+      setReviewingId(null);
+    }
+  }
+
+  // group per bulan (hanya yang sudah diproses)
   const byMonth = (() => {
     if (!reports) return [];
     const grouped: Record<string, AdminReport[]> = {};
-    reports.forEach((r) => {
+    reports.filter((r) => r.admin_status !== "pending").forEach((r) => {
       const key = new Date(r.created_at).toLocaleDateString("id-ID", {
         month: "long",
         year: "numeric",
@@ -1376,6 +1403,16 @@ function ManajemenLaporanView() {
   return (
     <div className="space-y-5">
       <SectionTitle>Manajemen Laporan</SectionTitle>
+
+      {/* Banner pending */}
+      {pendingCount > 0 && (
+        <div className="flex items-center gap-3 rounded-xl border border-[#BFDBFE] bg-[#EFF6FF] px-4 py-3">
+          <span className="text-lg">⏳</span>
+          <p className="text-sm text-[#1D4ED8]">
+            Ada <span className="font-bold">{pendingCount} laporan SOS</span> yang menunggu keputusan admin.
+          </p>
+        </div>
+      )}
 
       {/* toolbar: filter + export */}
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1419,36 +1456,80 @@ function ManajemenLaporanView() {
       ) : mode === "transaksi" ? (
         /* ── Tabel per transaksi ── */
         <TableWrap>
-          <table className="w-full min-w-[750px] text-sm">
+          <table className="w-full min-w-[860px] text-sm">
             <thead>
               <tr className="bg-[#F0E9FF] text-[#111111]">
                 <Th>Pelapor</Th>
                 <Th>Provider Dilaporkan</Th>
                 <Th>Alasan</Th>
+                <Th center>Status</Th>
                 <Th center>Tindakan</Th>
+                <Th center>Review Admin</Th>
                 <Th center>Tanggal</Th>
-                <Th center>Detail</Th>
               </tr>
             </thead>
             <tbody>
               {reports!.map((r: AdminReport) => (
                 <tr
                   key={r.id}
-                  tabIndex={0}
-                  onClick={() => setSelected(r)}
-                  onKeyDown={(e) => { if (e.key === "Enter") setSelected(r); }}
-                  className="cursor-pointer border-b border-[#F3E8FF] last:border-0 hover:bg-[#F8F5FF] transition-colors"
+                  className={cn(
+                    "border-b border-[#F3E8FF] last:border-0 transition-colors",
+                    r.admin_status === "pending" && "bg-[#F0F7FF]",
+                  )}
                 >
                   <td className="px-4 py-3 text-[#111111] font-medium">{r.reporter_name}</td>
                   <td className="px-4 py-3 text-[#111111]">{r.provider_name}</td>
-                  <td className="px-4 py-3 text-[#64748B] max-w-[200px] truncate">{r.reason ?? "-"}</td>
+                  <td className="px-4 py-3 text-[#64748B] max-w-[180px] truncate">{r.reason ?? "-"}</td>
                   <td className="px-4 py-3 text-center">
-                    <span className={cn("inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs", actionStyle(r.action_taken))}>
-                      {actionLabel(r.action_taken)}
+                    <span className={cn(
+                      "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium",
+                      r.admin_status === "pending" && "bg-[#EFF6FF] text-[#2563EB] border-[#BFDBFE]",
+                      r.admin_status === "approved" && "bg-[#F0FDF4] text-[#16A34A] border-[#BBF7D0]",
+                      r.admin_status === "rejected" && "bg-[#F1F5F9] text-[#94A3B8] border-[#E2E8F0]",
+                    )}>
+                      {adminStatusLabel(r.admin_status)}
                     </span>
                   </td>
+                  <td className="px-4 py-3 text-center">
+                    {r.admin_status === "approved" ? (
+                      <span className={cn("inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs", actionStyle(r.action_taken, r.admin_status))}>
+                        {actionLabel(r.action_taken)}
+                      </span>
+                    ) : (
+                      <span className="text-[#CBD5E1] text-xs">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    {r.admin_status === "pending" ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          type="button"
+                          disabled={reviewingId === r.id}
+                          onClick={() => handleReview(r.id, "approve")}
+                          className="px-3 py-1 rounded-lg bg-[#16A34A] text-white text-xs font-semibold hover:bg-[#15803D] disabled:opacity-50 transition-colors"
+                        >
+                          {reviewingId === r.id ? "..." : "Iya"}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={reviewingId === r.id}
+                          onClick={() => handleReview(r.id, "reject")}
+                          className="px-3 py-1 rounded-lg bg-[#DC2626] text-white text-xs font-semibold hover:bg-[#B91C1C] disabled:opacity-50 transition-colors"
+                        >
+                          {reviewingId === r.id ? "..." : "Tidak"}
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setSelected(r)}
+                        className="text-xs text-[#7C3AED] hover:underline"
+                      >
+                        Detail
+                      </button>
+                    )}
+                  </td>
                   <Td center>{formatDate(r.created_at)}</Td>
-                  <td className="px-4 py-3 text-center text-xs text-[#7C3AED] hover:underline">Detail</td>
                 </tr>
               ))}
             </tbody>
@@ -1517,16 +1598,24 @@ function ManajemenLaporanView() {
               <X className="h-5 w-5" />
             </button>
             <h2 className="mb-5 text-center text-base font-bold text-[#EC2D8F]">Detail Laporan</h2>
-            <div className="space-y-2.5 text-sm">
+            <div className="space-y-2.5 text-sm mb-5">
               {([
                 ["Pelapor", `${selected.reporter_name} (${selected.reporter_email})`],
                 ["Provider", `${selected.provider_name} (${selected.provider_email})`],
                 ["Alasan", selected.reason ?? "-"],
-                ["Tindakan", actionLabel(selected.action_taken)],
-                ["Pelanggaran ke-", String(selected.violation_count)],
-                ["Tanggal", formatDateTime(selected.created_at)],
-                ...(selected.suspended_until
-                  ? [["Suspend sampai", formatDate(selected.suspended_until)]]
+                ["Status Review", adminStatusLabel(selected.admin_status)],
+                ...(selected.admin_status === "approved"
+                  ? [
+                      ["Tindakan", actionLabel(selected.action_taken)],
+                      ["Pelanggaran ke-", String(selected.violation_count)],
+                      ...(selected.suspended_until
+                        ? [["Suspend sampai", formatDate(selected.suspended_until)]]
+                        : []),
+                    ]
+                  : []),
+                ["Tanggal Laporan", formatDateTime(selected.created_at)],
+                ...(selected.reviewed_at
+                  ? [["Tanggal Review", formatDateTime(selected.reviewed_at)]]
                   : []),
               ] as [string, string][]).map(([label, value]) => (
                 <div key={label} className="grid grid-cols-[150px_8px_1fr] items-start gap-1">
@@ -1536,6 +1625,28 @@ function ManajemenLaporanView() {
                 </div>
               ))}
             </div>
+
+            {/* Tombol Iya/Tidak di modal jika masih pending */}
+            {selected.admin_status === "pending" && (
+              <div className="flex gap-3 pt-4 border-t border-[#F3E8FF]">
+                <button
+                  type="button"
+                  disabled={reviewingId === selected.id}
+                  onClick={() => handleReview(selected.id, "approve")}
+                  className="flex-1 py-2.5 rounded-xl bg-[#16A34A] text-white font-semibold text-sm hover:bg-[#15803D] disabled:opacity-50 transition-colors"
+                >
+                  {reviewingId === selected.id ? "Memproses..." : "✅ Iya — Setujui & Terapkan"}
+                </button>
+                <button
+                  type="button"
+                  disabled={reviewingId === selected.id}
+                  onClick={() => handleReview(selected.id, "reject")}
+                  className="flex-1 py-2.5 rounded-xl bg-[#DC2626] text-white font-semibold text-sm hover:bg-[#B91C1C] disabled:opacity-50 transition-colors"
+                >
+                  {reviewingId === selected.id ? "Memproses..." : "❌ Tidak — Tolak"}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

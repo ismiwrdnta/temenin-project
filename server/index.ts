@@ -53,6 +53,7 @@ import {
   handleAdminListTransactions,
   handleAdminRefundTransaction,
   handleAdminListReports,
+  handleAdminReviewSos,
   handleAdminLogs,
   handleAdminCharts,
 } from "./routes/admin";
@@ -144,6 +145,7 @@ export function createServer() {
   app.get("/api/admin/transactions", requireAdmin, handleAdminListTransactions);
   app.post("/api/admin/transactions/:id/refund", requireAdmin, handleAdminRefundTransaction);
   app.get("/api/admin/reports", requireAdmin, handleAdminListReports);
+  app.patch("/api/admin/sos/:id/review", requireAdmin, handleAdminReviewSos);
   app.get("/api/admin/logs", requireAdmin, handleAdminLogs);
   app.get("/api/admin/charts", requireAdmin, handleAdminCharts);
 
