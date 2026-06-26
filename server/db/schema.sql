@@ -373,3 +373,27 @@ CREATE TABLE IF NOT EXISTS admin_logs (
 
 CREATE INDEX IF NOT EXISTS idx_admin_logs_created
   ON admin_logs(admin_id, created_at DESC);
+
+-- ============================================================
+-- Migration: 009_sos_admin_review.sql
+-- SOS laporan kini memerlukan persetujuan admin sebelum tindakan
+-- ============================================================
+
+-- Buat action_taken nullable (pending = belum diputuskan admin)
+ALTER TABLE provider_violations ALTER COLUMN action_taken DROP NOT NULL;
+ALTER TABLE provider_violations DROP CONSTRAINT IF EXISTS provider_violations_action_taken_check;
+ALTER TABLE provider_violations ADD CONSTRAINT provider_violations_action_taken_check
+  CHECK (action_taken IN ('warning', 'suspension', 'permanent_ban'));
+
+-- violation_count = 0 saat pending (akan diisi saat admin approve)
+ALTER TABLE provider_violations ALTER COLUMN violation_count SET DEFAULT 0;
+
+-- Status review admin
+ALTER TABLE provider_violations ADD COLUMN IF NOT EXISTS admin_status VARCHAR(20) NOT NULL DEFAULT 'pending'
+  CHECK (admin_status IN ('pending', 'approved', 'rejected'));
+
+-- Siapa admin yang mereview dan kapan
+ALTER TABLE provider_violations ADD COLUMN IF NOT EXISTS reviewed_by UUID REFERENCES users(id);
+ALTER TABLE provider_violations ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMPTZ;
+
+CREATE INDEX IF NOT EXISTS idx_violations_admin_status ON provider_violations(admin_status);

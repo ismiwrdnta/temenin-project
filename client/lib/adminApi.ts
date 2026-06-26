@@ -90,14 +90,17 @@ export interface AdminTransaction {
 export interface AdminReport {
   id: string;
   reason: string | null;
-  action_taken: string;
+  action_taken: string | null;
   violation_count: number;
   suspended_until: string | null;
   created_at: string;
+  admin_status: "pending" | "approved" | "rejected";
+  reviewed_at: string | null;
   reporter_name: string;
   reporter_email: string;
   provider_name: string;
   provider_email: string;
+  provider_user_id: string;
 }
 
 export interface AdminLog {
@@ -140,6 +143,11 @@ export const adminApi = {
       { method: "POST" },
     ),
   getReports: () => adminFetch<AdminReport[]>("/api/admin/reports"),
+  reviewSos: (id: string, action: "approve" | "reject") =>
+    adminFetch<{ action: string; violation_count?: number; suspended_until?: string | null }>(
+      `/api/admin/sos/${id}/review`,
+      { method: "PATCH", body: JSON.stringify({ action }) },
+    ),
   getLogs: () => adminFetch<AdminLog[]>("/api/admin/logs"),
   getCharts: () => adminFetch<AdminChartData>("/api/admin/charts"),
 };

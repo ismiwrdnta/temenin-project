@@ -198,7 +198,7 @@ export function isUuid(value: string): boolean {
 }
 
 export type SosResult = {
-  action: "warning" | "suspension" | "permanent_ban";
+  action: "warning" | "suspension" | "permanent_ban" | "pending";
   violation_count: number;
   suspended_until: string | null;
   message: string;

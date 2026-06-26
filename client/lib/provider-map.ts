@@ -67,6 +67,8 @@ export function mapApiProviderToMapProvider(
     distanceKm: distanceKm ?? 999,
     lat,
     lng,
+    bio: provider.bio ?? null,
+    rawCategories: provider.categories ?? [],
   };
 }
 

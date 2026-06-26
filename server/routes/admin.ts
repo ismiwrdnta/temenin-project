@@ -352,18 +352,144 @@ export const handleAdminListReports: RequestHandler = async (req, res) => {
     const result = await pool.query(
       `SELECT pv.id, pv.reason, pv.action_taken, pv.violation_count,
               pv.suspended_until, pv.created_at,
+              pv.admin_status, pv.reviewed_at,
               u_reporter.full_name AS reporter_name, u_reporter.email AS reporter_email,
-              u_provider.full_name AS provider_name, u_provider.email AS provider_email
+              u_provider.full_name AS provider_name, u_provider.email AS provider_email,
+              u_provider.id AS provider_user_id
        FROM provider_violations pv
        JOIN users u_reporter ON u_reporter.id = pv.reported_by
        JOIN users u_provider ON u_provider.id = pv.provider_user_id
-       ORDER BY pv.created_at DESC
+       ORDER BY
+         CASE WHEN pv.admin_status = 'pending' THEN 0 ELSE 1 END,
+         pv.created_at DESC
        LIMIT 100`,
     );
     res.json({ data: result.rows });
   } catch (err) {
     console.error("admin list reports error:", err);
     res.status(500).json({ error: "Gagal memuat daftar laporan." });
+  }
+};
+
+// A06b — PATCH /api/admin/sos/:id/review
+export const handleAdminReviewSos: RequestHandler = async (req, res) => {
+  const adminId = req.userId!;
+  const { id } = req.params;
+  const { action } = req.body as { action: "approve" | "reject" };
+
+  if (action !== "approve" && action !== "reject") {
+    res.status(400).json({ error: "Action harus 'approve' atau 'reject'." });
+    return;
+  }
+
+  try {
+    const pool = db();
+
+    const violResult = await pool.query<{
+      id: string;
+      provider_user_id: string;
+      booking_id: string;
+      admin_status: string;
+    }>(
+      `SELECT id, provider_user_id, booking_id, admin_status FROM provider_violations WHERE id = $1`,
+      [id],
+    );
+    if (violResult.rows.length === 0) {
+      res.status(404).json({ error: "Laporan tidak ditemukan." });
+      return;
+    }
+    const violation = violResult.rows[0];
+    if (violation.admin_status !== "pending") {
+      res.status(409).json({ error: "Laporan ini sudah diproses sebelumnya." });
+      return;
+    }
+
+    if (action === "reject") {
+      await pool.query(
+        `UPDATE provider_violations
+         SET admin_status = 'rejected', reviewed_by = $1, reviewed_at = NOW()
+         WHERE id = $2`,
+        [adminId, id],
+      );
+      await logAction(adminId, "Tolak laporan SOS", "violation", id);
+      res.json({ data: { action: "rejected" } });
+      return;
+    }
+
+    // approve: hitung pelanggaran baru dan terapkan tindakan
+    const providerUserId = violation.provider_user_id;
+
+    const updateResult = await pool.query<{ violation_count: number }>(
+      `UPDATE users SET violation_count = violation_count + 1 WHERE id = $1 RETURNING violation_count`,
+      [providerUserId],
+    );
+    const violationCount = updateResult.rows[0].violation_count;
+
+    let actionTaken: string;
+    let suspendedUntil: string | null = null;
+
+    if (violationCount <= 2) {
+      // Pelanggaran ke-1 dan ke-2: peringatan
+      actionTaken = "warning";
+      await pool.query(
+        `INSERT INTO notifications (user_id, type, title, body, data)
+         VALUES ($1, 'violation_warning', 'Peringatan Pelanggaran', $2, $3)`,
+        [
+          providerUserId,
+          `Kamu mendapat peringatan ke-${violationCount} karena laporan pelanggaran yang telah disetujui admin. Harap patuhi aturan platform Temenin.`,
+          JSON.stringify({ violation_id: id, booking_id: violation.booking_id }),
+        ],
+      );
+    } else if (violationCount === 3) {
+      // Pelanggaran ke-3: skorsing 30 hari
+      actionTaken = "suspension";
+      const suspendDate = new Date();
+      suspendDate.setDate(suspendDate.getDate() + 30);
+      suspendedUntil = suspendDate.toISOString();
+      await pool.query(`UPDATE users SET suspended_until = $1 WHERE id = $2`, [
+        suspendedUntil,
+        providerUserId,
+      ]);
+      await pool.query(
+        `INSERT INTO notifications (user_id, type, title, body, data)
+         VALUES ($1, 'violation_suspension', 'Akun Diskorsing', $2, $3)`,
+        [
+          providerUserId,
+          `Akun kamu diskorsing selama 30 hari karena pelanggaran ke-3 yang telah disetujui admin.`,
+          JSON.stringify({ violation_id: id, suspended_until: suspendedUntil }),
+        ],
+      );
+    } else {
+      // Pelanggaran ke-4+: ban permanen
+      actionTaken = "permanent_ban";
+      await pool.query(`UPDATE users SET is_banned = true WHERE id = $1`, [providerUserId]);
+      await pool.query(
+        `INSERT INTO notifications (user_id, type, title, body, data)
+         VALUES ($1, 'violation_ban', 'Akun Dibekukan Permanen', $2, $3)`,
+        [
+          providerUserId,
+          "Akun kamu dibekukan permanen akibat pelanggaran berulang.",
+          JSON.stringify({ violation_id: id }),
+        ],
+      );
+    }
+
+    await pool.query(
+      `UPDATE provider_violations
+       SET admin_status = 'approved', action_taken = $1, violation_count = $2,
+           suspended_until = $3, reviewed_by = $4, reviewed_at = NOW()
+       WHERE id = $5`,
+      [actionTaken, violationCount, suspendedUntil, adminId, id],
+    );
+
+    await logAction(adminId, `Setujui laporan SOS — tindakan: ${actionTaken}`, "violation", id);
+
+    res.json({
+      data: { action: actionTaken, violation_count: violationCount, suspended_until: suspendedUntil },
+    });
+  } catch (err) {
+    console.error("admin review SOS error:", err);
+    res.status(500).json({ error: "Gagal memproses review SOS." });
   }
 };
 
